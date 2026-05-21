@@ -69,6 +69,13 @@ func _receive_inventory_action(action_data: Dictionary) -> void:
 	var sender_id = multiplayer.get_remote_sender_id()
 	inventory_action_received.emit(action_data, sender_id)
 
+# ---------- 职业系统 RPC ----------
+
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_class_action(action_data: Dictionary) -> void:
+	var sender_id = multiplayer.get_remote_sender_id()
+	class_action_received.emit(action_data, sender_id)
+
 # ---------- 服务端 → 客户端 RPC ----------
 
 @rpc("authority", "call_remote", "reliable")
@@ -94,6 +101,14 @@ func _on_craft_result(result_data: Dictionary) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _on_build_result(result_data: Dictionary) -> void:
 	build_result_received.emit(result_data)
+
+@rpc("authority", "call_remote", "reliable")
+func _on_class_stats(stats_data: Dictionary) -> void:
+	class_stats_received.emit(stats_data)
+
+@rpc("authority", "call_remote", "reliable")
+func _on_skill_slots(slots_data: Array) -> void:
+	skill_slots_received.emit(slots_data)
 
 
 # ---------- 信号 ----------
@@ -127,4 +142,7 @@ signal block_placed_received(block_data: Dictionary)
 signal block_removed_received(grid_pos: Dictionary)
 signal craft_result_received(result_data: Dictionary)
 signal build_result_received(result_data: Dictionary)
+signal class_action_received(action_data: Dictionary, peer_id: int)
+signal class_stats_received(stats_data: Dictionary)
+signal skill_slots_received(slots_data: Array)
 
