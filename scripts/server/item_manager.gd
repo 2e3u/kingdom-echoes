@@ -137,6 +137,7 @@ func consume_durability(player_id: int, slot_index: int, amount: int = 1) -> boo
         return false
     slot["durability"] = max(0, dur - amount)
     if slot["durability"] <= 0:
+        # GDScript 字典键赋值：仅设置 broken 键，不覆盖 item_id/quantity 等其他键
         slot["broken"] = true
     return true
 
