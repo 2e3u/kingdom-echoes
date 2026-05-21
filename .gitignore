@@ -1,0 +1,14 @@
+# Godot
+.godot/
+*.translation
+export/
+export_presets.cfg
+
+# Imported assets metadata
+.import/
+
+# macOS
+.DS_Store
+
+# Superpowers
+.superpowers/
