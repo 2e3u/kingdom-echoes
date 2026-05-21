@@ -1,5 +1,5 @@
 extends Node
-class_name NetworkRPC
+## 注意：此脚本作为 autoload 注册，不可使用 class_name（Godot 4.6 限制：class_name 会隐藏 autoload 单例）
 
 ## 共享 RPC 中继节点 — 作为 autoload 存在于客户端和服务端相同路径
 ## 所有跨网络 RPC 方法统一在此定义，确保 NodePath 一致

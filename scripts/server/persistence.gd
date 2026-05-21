@@ -8,6 +8,8 @@ const SAVE_INTERVAL: float = 5.0
 
 var world_state_manager: WorldStateManager = null
 var item_manager: ItemManager = null
+var class_manager: ClassManager = null
+var skill_manager: SkillManager = null
 var _save_timer: float = 0.0
 
 func _ready() -> void:
@@ -68,6 +70,8 @@ func _auto_save() -> void:
 			var pid = p.get("player_id", -1)
 			if pid >= 0:
 				save_inventory(pid)
+				if class_manager:
+					save_player_class(pid)
 
 # ---------- 世界状态持久化（含方块+资源节点） ----------
 
@@ -182,3 +186,33 @@ func save_leaderboard(data: Array[Dictionary]) -> bool:
 func load_leaderboard() -> Array[Dictionary]:
 	var data = load_json(SharedConstants.SAVE_DIR + "leaderboard.json")
 	return data.get("leaderboard", [])
+
+# ---------- 职业数据持久化 ----------
+
+func save_player_class(player_id: int) -> bool:
+	if not class_manager:
+		return false
+	var stats = class_manager.to_dict(player_id)
+	if stats.is_empty():
+		return false
+	var skill_data = skill_manager.to_dict(player_id) if skill_manager else {}
+	stats["skills"] = skill_data
+	var existing = load_player_data(player_id)
+	existing["class"] = stats
+	return save_player_data(player_id, existing)
+
+func load_player_class(player_id: int) -> Dictionary:
+	var data = load_player_data(player_id)
+	return data.get("class", {})
+
+func restore_player_class(player_id: int) -> bool:
+	var class_data = load_player_class(player_id)
+	if class_data.is_empty():
+		return false
+	if class_manager:
+		class_manager.restore(player_id, class_data)
+	if skill_manager and class_data.has("skills"):
+		skill_manager.from_dict(player_id, class_data["skills"])
+	print("[Persistence] 玩家 %d 职业数据已恢复" % player_id)
+	return true
+

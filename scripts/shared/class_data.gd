@@ -135,7 +135,7 @@ static func _register_ranger() -> void:
 		},
 	}
 
-static func get_class(class_type: int) -> Dictionary:
+static func get_class_def(class_type: int) -> Dictionary:
 	return classes.get(class_type, {})
 
 static func get_class_name(class_type: int) -> String:

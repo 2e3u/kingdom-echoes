@@ -12,7 +12,7 @@ func is_class_chosen(player_id: int) -> bool:
 func choose_class(player_id: int, class_type: int) -> Dictionary:
 	if class_type < SharedEnums.ClassType.WARRIOR or class_type > SharedEnums.ClassType.RANGER:
 		return {"success": false, "message": "无效的职业类型"}
-	var class_def = ClassDatabase.get_class(class_type)
+	var class_def = ClassDatabase.get_class_def(class_type)
 	if class_def.is_empty():
 		return {"success": false, "message": "职业数据不存在"}
 	var stats = SharedDataModels.CharacterStats.new()
@@ -75,7 +75,7 @@ func _level_up(player_id: int) -> void:
 	stats.level += 1
 	stats.free_points += SharedConstants.ATTR_POINTS_PER_LEVEL
 	# 自动分配职业属性
-	var class_def = ClassDatabase.get_class(stats.class_type)
+	var class_def = ClassDatabase.get_class_def(stats.class_type)
 	var auto = class_def.get("levelup_auto", {})
 	for attr_key in auto:
 		stats.base_attrs[attr_key] = stats.base_attrs.get(attr_key, 0) + auto[attr_key]

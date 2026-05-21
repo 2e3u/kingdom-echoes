@@ -4,7 +4,7 @@ func test_four_classes_registered() -> void:
 	assert_eq(ClassDatabase.classes.size(), 4)
 	for ct in [SharedEnums.ClassType.WARRIOR, SharedEnums.ClassType.ARCHER,
 			   SharedEnums.ClassType.MAGE, SharedEnums.ClassType.RANGER]:
-		assert_false(ClassDatabase.get_class(ct).is_empty(), "职业 %d 未注册" % ct)
+		assert_false(ClassDatabase.get_class_def(ct).is_empty(), "职业 %d 未注册" % ct)
 
 func test_each_class_has_base_attributes() -> void:
 	for ct in ClassDatabase.classes:

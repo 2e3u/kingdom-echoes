@@ -31,7 +31,7 @@ func _create_class_buttons() -> void:
 
 func _on_class_button(class_type: int) -> void:
 	_selected_class = class_type
-	var def = ClassDatabase.get_class(class_type)
+	var def = ClassDatabase.get_class_def(class_type)
 	if class_name_label:
 		class_name_label.text = def.get("name", "")
 	if class_desc_label:

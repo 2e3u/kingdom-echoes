@@ -59,6 +59,18 @@ func _initialize_subsystems() -> void:
 	tutorial_controller.name = "TutorialController"
 	add_child(tutorial_controller)
 
+	# 创建职业选择界面
+	var class_select_ui = ClassSelectUI.new()
+	class_select_ui.name = "ClassSelectUI"
+	class_select_ui.hide()
+	add_child(class_select_ui)
+
+	# 创建角色面板
+	var character_panel = CharacterPanel.new()
+	character_panel.name = "CharacterPanel"
+	character_panel.hide()
+	add_child(character_panel)
+
 	# 查找场景中已有的 UICanvas (带 UIController 脚本)
 	ui_controller = $UICanvas as UIController
 
@@ -84,6 +96,11 @@ func _connect_signals() -> void:
 	if ui_controller:
 		ui_controller.connect_requested.connect(_on_connect_requested)
 		ui_controller.auth_requested.connect(_on_ui_auth_requested)
+
+	# 连接 GameClientManager 的职业/技能信号
+	if game_client:
+		if not game_client.class_stats_updated.is_connected(_on_class_stats_updated):
+			game_client.class_stats_updated.connect(_on_class_stats_updated)
 
 
 func connect_to_server(address: String = "127.0.0.1", port: int = SharedConstants.SERVER_DEFAULT_PORT) -> void:
@@ -273,3 +290,7 @@ func _process(_delta: float) -> void:
 
 func _exit_tree() -> void:
 	disconnect_from_server()
+
+func _on_class_stats_updated(stats_data: Dictionary) -> void:
+	pass
+

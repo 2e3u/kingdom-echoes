@@ -31,6 +31,8 @@ signal auth_response_received(response_data: Dictionary)
 signal inventory_updated(inventory_data: Dictionary)
 signal block_updated(block_data: Dictionary)
 signal block_removed(grid_pos: Dictionary)
+signal class_stats_updated(stats_data: Dictionary)
+signal skill_slots_updated(slots_data: Array)
 
 func _ready() -> void:
 	print("[GameClientManager] 联网管理器已初始化")
@@ -55,6 +57,10 @@ func _connect_network_signals() -> void:
 		NetworkRPC.block_placed_received.connect(_on_block_placed_received)
 	if not NetworkRPC.block_removed_received.is_connected(_on_block_removed_received):
 		NetworkRPC.block_removed_received.connect(_on_block_removed_received)
+	if not NetworkRPC.class_stats_received.is_connected(_on_class_stats_received):
+		NetworkRPC.class_stats_received.connect(_on_class_stats_received)
+	if not NetworkRPC.skill_slots_received.is_connected(_on_skill_slots_received):
+		NetworkRPC.skill_slots_received.connect(_on_skill_slots_received)
 
 
 # ---------- 连接管理 ----------
@@ -121,6 +127,10 @@ func _disconnect_network_signals() -> void:
 		NetworkRPC.block_placed_received.disconnect(_on_block_placed_received)
 	if NetworkRPC.block_removed_received.is_connected(_on_block_removed_received):
 		NetworkRPC.block_removed_received.disconnect(_on_block_removed_received)
+	if NetworkRPC.class_stats_received.is_connected(_on_class_stats_received):
+		NetworkRPC.class_stats_received.disconnect(_on_class_stats_received)
+	if NetworkRPC.skill_slots_received.is_connected(_on_skill_slots_received):
+		NetworkRPC.skill_slots_received.disconnect(_on_skill_slots_received)
 
 
 func _on_connected_ok() -> void:
@@ -193,6 +203,14 @@ func _on_block_placed_received(block_data: Dictionary) -> void:
 
 func _on_block_removed_received(grid_pos: Dictionary) -> void:
 	block_removed.emit(grid_pos)
+
+
+func _on_class_stats_received(stats_data: Dictionary) -> void:
+	class_stats_updated.emit(stats_data)
+
+
+func _on_skill_slots_received(slots_data: Array) -> void:
+	skill_slots_updated.emit(slots_data)
 
 
 # ---------- RPC: 发送到服务端 ----------
@@ -287,3 +305,10 @@ func calculate_latency(server_time: float, client_send_time: float) -> void:
 	# 根据服务端返回的时间戳计算延迟
 	var now = Time.get_ticks_msec() / 1000.0
 	latency_ms = int((now - client_send_time) * 1000.0)
+
+func _on_class_stats_received(stats_data: Dictionary) -> void:
+	class_stats_updated.emit(stats_data)
+
+func _on_skill_slots_received(slots_data: Array) -> void:
+	skill_slots_updated.emit(slots_data)
+

@@ -19,14 +19,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-SharedEnums="*res://scripts/shared/enums.gd"
-SharedConstants="*res://scripts/shared/constants.gd"
-SharedDataModels="*res://scripts/shared/data_models.gd"
 NetworkRPC="*res://scripts/shared/network_rpc.gd"
-ItemDatabase="*res://scripts/shared/item_data.gd"
-RecipeDatabase="*res://scripts/shared/recipe_data.gd"
-ClassDatabase="*res://scripts/shared/class_data.gd"
-SkillDatabase="*res://scripts/shared/skill_data.gd"
 
 [display]
 

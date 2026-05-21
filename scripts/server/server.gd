@@ -88,6 +88,8 @@ func _initialize_subsystems() -> void:
 	# 将 WorldStateManager 引用注入 PersistenceManager（用于自动保存）
 	persistence.world_state_manager = world_state
 	persistence.item_manager = game_loop.item_manager
+	persistence.class_manager = game_loop.class_manager
+	persistence.skill_manager = game_loop.skill_manager
 
 	_connect_signals()
 
@@ -183,6 +185,7 @@ func _on_auth_request(request_data: Dictionary, peer_id: int) -> void:
 		# 恢复玩家背包
 		if persistence:
 			persistence.restore_player_inventory(peer_id)
+			persistence.restore_player_class(peer_id)
 
 	# 发送响应
 	var response_dict = _build_auth_response_dict(response)
