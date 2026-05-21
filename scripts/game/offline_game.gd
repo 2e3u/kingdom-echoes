@@ -23,9 +23,9 @@ var crafting_manager: CraftingManager = null
 var time_system: TimeSystem = null
 
 # 输入状态
-var move_dir: Vector2 = Vector2.ZERO
 var harvest_cooldown: float = 0.0
 var inventory_open: bool = false
+var craft_open: bool = false
 
 # HUD 元素
 var hud: CanvasLayer = null
@@ -33,10 +33,13 @@ var hud_bg: Panel = null
 var hud_labels: Array[Label] = []
 var inv_panel: Panel = null
 var inv_labels: Array[Label] = []
+var craft_panel: Panel = null
+var craft_buttons: Array[Button] = []
+var craft_title_label: Label = null
+var craft_scroll: int = 0
 
 # 昼夜灯光
 var light_rect: ColorRect = null
-var game_time_label: Label = null
 
 
 func _ready() -> void:
@@ -200,7 +203,7 @@ func _create_hud() -> void:
 		"附近: --",
 		"时间: --",
 		"背包: 0 种物品",
-		"WASD=移动  E=采集  I=背包  C=制造",
+		"WASD=移动  E=采集  I=背包  C=制造面板",
 	]
 	for i in range(6):
 		var lbl = Label.new()
@@ -237,6 +240,23 @@ func _create_hud() -> void:
 		lbl.visible = false
 		hud.add_child(lbl)
 		inv_labels.append(lbl)
+
+	# 制造面板（默认隐藏）
+	craft_panel = Panel.new()
+	craft_panel.position = Vector2(300, 8)
+	craft_panel.size = Vector2(360, 400)
+	craft_panel.modulate = Color(0, 0, 0, 0.75)
+	craft_panel.visible = false
+	hud.add_child(craft_panel)
+
+	craft_title_label = Label.new()
+	craft_title_label.text = "[b]制造 (手工)[/b]  材料足够=绿色"
+	craft_title_label.position = Vector2(316, 14)
+	craft_title_label.add_theme_font_size_override("font_size", 14)
+	craft_title_label.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
+	craft_title_label.visible = false
+	hud.add_child(craft_title_label)
+	_refresh_craft_buttons()
 
 	# 昼夜光效叠加层
 	light_rect = ColorRect.new()
@@ -278,9 +298,15 @@ func _process(delta: float) -> void:
 
 	if Input.is_action_just_pressed("ui_accept"):
 		inventory_open = !inventory_open
+		craft_open = false
 		inv_panel.visible = inventory_open
+		craft_panel.visible = false
 		for lbl in inv_labels:
 			lbl.visible = inventory_open
+		for btn in craft_buttons:
+			btn.visible = false
+		if craft_title_label:
+			craft_title_label.visible = false
 
 	# 昼夜循环
 	if time_system:
@@ -323,37 +349,98 @@ func _try_harvest() -> void:
 	)
 
 
-# ========== 制造 ==========
+# ========== 制造面板 ==========
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		inventory_open = false
+		craft_open = false
 		inv_panel.visible = false
+		craft_panel.visible = false
 		for lbl in inv_labels:
 			lbl.visible = false
+		for btn in craft_buttons:
+			btn.visible = false
+		if craft_title_label:
+			craft_title_label.visible = false
 
 	if event.is_action_pressed("ui_text_completion_replace") and not event.is_echo():
-		_try_craft()
+		craft_open = !craft_open
+		inventory_open = false
+		inv_panel.visible = false
+		craft_panel.visible = craft_open
+		for lbl in inv_labels:
+			lbl.visible = false
+		for btn in craft_buttons:
+			btn.visible = craft_open
+		if craft_title_label:
+			craft_title_label.visible = craft_open
+		if craft_open:
+			_refresh_craft_buttons()
 
 
-func _try_craft() -> void:
-	# 尝试制造第一个可制造的物品
+func _refresh_craft_buttons() -> void:
+	for btn in craft_buttons:
+		btn.queue_free()
+	craft_buttons.clear()
+
+	var recipes = RecipeDatabase.get_recipes_for_station(SharedEnums.CraftStation.HAND)
+	var inv = item_manager.get_inventory(1)
+	var y_offset = 40
+
+	for i in range(recipes.size()):
+		var recipe = recipes[i]
+		if i < craft_scroll:
+			continue
+		var mats = recipe.get("materials", {})
+		var can_craft = true
+		var mat_text_parts: Array[String] = []
+		for mat_id in mats:
+			var need = mats[mat_id]
+			var has = _count_item(mat_id)
+			mat_text_parts.append("%s %d/%d" % [ItemDatabase.get_item_name(mat_id), has, need])
+			if has < need:
+				can_craft = false
+		var mat_text = " + ".join(mat_text_parts)
+		var output_name = ItemDatabase.get_item_name(recipe.get("output_item_id", ""))
+		var output_qty = recipe.get("output_quantity", 1)
+
+		var btn = Button.new()
+		btn.text = "%s x%d  [%s]" % [output_name, output_qty, mat_text]
+		btn.position = Vector2(316, y_offset)
+		btn.size = Vector2(330, 24)
+		btn.add_theme_font_size_override("font_size", 9)
+		btn.disabled = not can_craft
+		if can_craft:
+			btn.add_theme_color_override("font_color", Color.GREEN)
+		btn.pressed.connect(_on_craft_button.bind(recipe.get("recipe_id", "")))
+		btn.visible = craft_open
+		hud.add_child(btn)
+		craft_buttons.append(btn)
+		y_offset += 28
+		if y_offset > 370 - 28:
+			break
+
+
+func _on_craft_button(recipe_id: String) -> void:
+	var result = crafting_manager.try_craft(1, recipe_id, SharedEnums.CraftStation.HAND)
+	if result.get("success", false):
+		var recipe = RecipeDatabase.get_recipe(recipe_id)
+		_spawn_floating_text(player.position + Vector2(0, -20), "制造: %s" % ItemDatabase.get_item_name(recipe.get("output_item_id", "")))
+		_refresh_craft_buttons()
+	else:
+		_spawn_floating_text(player.position + Vector2(0, -20), "材料不足")
+
+
+func _count_item(item_id: String) -> int:
 	var inv = item_manager.get_inventory(1)
 	if not inv:
-		return
-	var recipes = RecipeDatabase.get_recipes_for_station(SharedEnums.CraftStation.HAND)
-	for recipe in recipes:
-		var mats = recipe.get("materials", {})
-		var can = true
-		for mat_id in mats:
-			if not item_manager.has_items(1, mat_id, mats[mat_id]):
-				can = false
-				break
-		if can and item_manager.can_add_item(1, recipe.get("output_item_id", ""), recipe.get("output_quantity", 1)):
-			var result = crafting_manager.try_craft(1, recipe.get("recipe_id", ""), SharedEnums.CraftStation.HAND)
-			if result.get("success", false):
-				_spawn_floating_text(player.position + Vector2(0, -20), "制造: %s" % ItemDatabase.get_item_name(recipe.get("output_item_id", "")))
-				return
+		return 0
+	var total = 0
+	for slot in inv.slots:
+		if not slot.is_empty() and slot.get("item_id", "") == item_id:
+			total += slot.get("quantity", 0)
+	return total
 
 
 # ========== 浮字 ==========
