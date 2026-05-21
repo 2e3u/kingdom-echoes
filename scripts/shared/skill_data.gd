@@ -1,5 +1,5 @@
 extends Node
-class_name SkillDatabase
+## 作为 autoload 注册，不可使用 class_name
 
 ## 技能静态数据库 — 所有技能的固定属性定义
 ## 技能来源：武器自带、天赋树解锁、任务奖励

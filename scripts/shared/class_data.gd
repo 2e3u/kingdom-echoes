@@ -1,5 +1,5 @@
 extends Node
-class_name ClassDatabase
+## 作为 autoload 注册，不可使用 class_name
 
 ## 职业静态数据库 — 4 职业的固定属性定义
 

@@ -1,5 +1,5 @@
 extends Node
-class_name ItemDatabase
+## 作为 autoload 注册，不可使用 class_name
 
 ## 物品静态数据库 — 所有物品的固定属性定义
 

@@ -45,24 +45,24 @@ func _ready() -> void:
     if not NetworkRPC.craft_action_received.is_connected(_on_craft_action):
         NetworkRPC.craft_action_received.connect(_on_craft_action)
 
-	build_manager = BuildManager.new()
-	build_manager.name = "BuildManager"
-	build_manager.item_manager = item_manager
-	build_manager.world_state_manager = world_state_manager
-	add_child(build_manager)
-	if not NetworkRPC.build_action_received.is_connected(_on_build_action):
-		NetworkRPC.build_action_received.connect(_on_build_action)
+        build_manager = BuildManager.new()
+        build_manager.name = "BuildManager"
+        build_manager.item_manager = item_manager
+        build_manager.world_state_manager = world_state_manager
+        add_child(build_manager)
+        if not NetworkRPC.build_action_received.is_connected(_on_build_action):
+                NetworkRPC.build_action_received.connect(_on_build_action)
 
-	class_manager = ClassManager.new()
-	class_manager.name = "ClassManager"
-	add_child(class_manager)
+        class_manager = ClassManager.new()
+        class_manager.name = "ClassManager"
+        add_child(class_manager)
 
-	skill_manager = SkillManager.new()
-	skill_manager.name = "SkillManager"
-	add_child(skill_manager)
+        skill_manager = SkillManager.new()
+        skill_manager.name = "SkillManager"
+        add_child(skill_manager)
 
-	if not NetworkRPC.class_action_received.is_connected(_on_class_action):
-		NetworkRPC.class_action_received.connect(_on_class_action)
+        if not NetworkRPC.class_action_received.is_connected(_on_class_action):
+                NetworkRPC.class_action_received.connect(_on_class_action)
 
 
 func start() -> void:
@@ -203,10 +203,10 @@ func _on_player_joined(player_id: int) -> void:
     if item_manager:
         item_manager.initialize_player_inventory(player_id)
 
-	if class_manager:
-		class_manager.choose_class(player_id, SharedEnums.ClassType.NONE)
-	if skill_manager:
-		skill_manager.init_player(player_id)
+        if class_manager:
+                class_manager.choose_class(player_id, SharedEnums.ClassType.NONE)
+        if skill_manager:
+                skill_manager.init_player(player_id)
 
 
 func _on_player_left(player_id: int) -> void:
@@ -221,10 +221,10 @@ func _on_player_left(player_id: int) -> void:
     if item_manager:
         item_manager.remove_player_inventory(player_id)
 
-	if class_manager:
-		class_manager.remove_player(player_id)
-	if skill_manager:
-		skill_manager.remove_player(player_id)
+        if class_manager:
+                class_manager.remove_player(player_id)
+        if skill_manager:
+                skill_manager.remove_player(player_id)
 
 
 func _on_inventory_action(action_data: Dictionary, peer_id: int) -> void:
@@ -345,52 +345,52 @@ func _on_craft_action(action_data: Dictionary, peer_id: int) -> void:
 # ---------- 建造系统 ----------
 
 func _on_build_action(action_data: Dictionary, peer_id: int) -> void:
-	if not build_manager:
-		return
-	var action = action_data.get("action", "")
-	var grid_pos_data = action_data.get("grid_pos", {"x": 0, "y": 0})
-	var grid_pos = Vector2i(grid_pos_data.get("x", 0), grid_pos_data.get("y", 0))
-	var player_dict = world_state_manager.get_player(peer_id) if world_state_manager else {}
-	var pos_d = player_dict.get("position", {"x": 0.0, "y": 0.0})
-	var player_pos = Vector2(pos_d.get("x", 0.0), pos_d.get("y", 0.0))
-	match action:
-		"place":
-			var block_id = action_data.get("block_id", "")
-			if block_id.is_empty():
-				return
-			if build_manager.place_block(peer_id, grid_pos, block_id, player_pos):
-				NetworkRPC.rpc("_on_block_placed", {
-					"block_id": block_id,
-					"grid_pos": {"x": grid_pos.x, "y": grid_pos.y},
-					"owner_id": peer_id,
-				})
-				_sync_inventory(peer_id)
-			else:
-				NetworkRPC.rpc_id(peer_id, "_on_build_result", {"success": false, "message": "放置失败"})
-		"remove":
-			if build_manager.remove_block(peer_id, grid_pos, player_pos):
-				NetworkRPC.rpc("_on_block_removed", {"x": grid_pos.x, "y": grid_pos.y})
-				_sync_inventory(peer_id)
-			else:
-				NetworkRPC.rpc_id(peer_id, "_on_build_result", {"success": false, "message": "拆除失败"})
+        if not build_manager:
+                return
+        var action = action_data.get("action", "")
+        var grid_pos_data = action_data.get("grid_pos", {"x": 0, "y": 0})
+        var grid_pos = Vector2i(grid_pos_data.get("x", 0), grid_pos_data.get("y", 0))
+        var player_dict = world_state_manager.get_player(peer_id) if world_state_manager else {}
+        var pos_d = player_dict.get("position", {"x": 0.0, "y": 0.0})
+        var player_pos = Vector2(pos_d.get("x", 0.0), pos_d.get("y", 0.0))
+        match action:
+                "place":
+                        var block_id = action_data.get("block_id", "")
+                        if block_id.is_empty():
+                                return
+                        if build_manager.place_block(peer_id, grid_pos, block_id, player_pos):
+                                NetworkRPC.rpc("_on_block_placed", {
+                                        "block_id": block_id,
+                                        "grid_pos": {"x": grid_pos.x, "y": grid_pos.y},
+                                        "owner_id": peer_id,
+                                })
+                                _sync_inventory(peer_id)
+                        else:
+                                NetworkRPC.rpc_id(peer_id, "_on_build_result", {"success": false, "message": "放置失败"})
+                "remove":
+                        if build_manager.remove_block(peer_id, grid_pos, player_pos):
+                                NetworkRPC.rpc("_on_block_removed", {"x": grid_pos.x, "y": grid_pos.y})
+                                _sync_inventory(peer_id)
+                        else:
+                                NetworkRPC.rpc_id(peer_id, "_on_build_result", {"success": false, "message": "拆除失败"})
 func _on_class_action(action_data: Dictionary, peer_id: int) -> void:
-	var action = action_data.get("action", "")
-	match action:
-		"choose_class":
-			var class_type = action_data.get("class_type", SharedEnums.ClassType.NONE)
-			var result = class_manager.choose_class(peer_id, class_type) if class_manager else {"success": false, "message": "系统未就绪"}
-			NetworkRPC.rpc_id(peer_id, "_on_class_stats", result.get("stats", {}))
-		"allocate_attribute":
-			var attr = action_data.get("attribute", 0)
-			var points = action_data.get("points", 0)
-			var result = class_manager.allocate_attribute(peer_id, attr, points) if class_manager else {"success": false, "message": "系统未就绪"}
-			NetworkRPC.rpc_id(peer_id, "_on_class_stats", result.get("stats", {}))
-		"equip_skill":
-			var slot = action_data.get("slot", 0)
-			var skill_id = action_data.get("skill_id", "")
-			var result = skill_manager.equip_skill(peer_id, slot, skill_id) if skill_manager else {"success": false, "message": "系统未就绪"}
-			NetworkRPC.rpc_id(peer_id, "_on_skill_slots", result.get("slots", []))
-		"unequip_skill":
-			var slot = action_data.get("slot", 0)
-			var result = skill_manager.unequip_skill(peer_id, slot) if skill_manager else {"success": false, "message": "系统未就绪"}
-			NetworkRPC.rpc_id(peer_id, "_on_skill_slots", result.get("slots", []))
+        var action = action_data.get("action", "")
+        match action:
+                "choose_class":
+                        var class_type = action_data.get("class_type", SharedEnums.ClassType.NONE)
+                        var result = class_manager.choose_class(peer_id, class_type) if class_manager else {"success": false, "message": "系统未就绪"}
+                        NetworkRPC.rpc_id(peer_id, "_on_class_stats", result.get("stats", {}))
+                "allocate_attribute":
+                        var attr = action_data.get("attribute", 0)
+                        var points = action_data.get("points", 0)
+                        var result = class_manager.allocate_attribute(peer_id, attr, points) if class_manager else {"success": false, "message": "系统未就绪"}
+                        NetworkRPC.rpc_id(peer_id, "_on_class_stats", result.get("stats", {}))
+                "equip_skill":
+                        var slot = action_data.get("slot", 0)
+                        var skill_id = action_data.get("skill_id", "")
+                        var result = skill_manager.equip_skill(peer_id, slot, skill_id) if skill_manager else {"success": false, "message": "系统未就绪"}
+                        NetworkRPC.rpc_id(peer_id, "_on_skill_slots", result.get("slots", []))
+                "unequip_skill":
+                        var slot = action_data.get("slot", 0)
+                        var result = skill_manager.unequip_skill(peer_id, slot) if skill_manager else {"success": false, "message": "系统未就绪"}
+                        NetworkRPC.rpc_id(peer_id, "_on_skill_slots", result.get("slots", []))

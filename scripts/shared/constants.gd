@@ -1,5 +1,5 @@
 extends Node
-class_name SharedConstants
+## 作为 autoload 注册，不可使用 class_name
 
 ## 共享常量定义 — 客户端和服务端使用同一套值
 

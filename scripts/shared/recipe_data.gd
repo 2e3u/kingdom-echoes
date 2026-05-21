@@ -1,5 +1,5 @@
 extends Node
-class_name RecipeDatabase
+## 作为 autoload 注册，不可使用 class_name
 
 ## 制造配方数据库 — 所有制造配方的静态定义
 

@@ -306,9 +306,3 @@ func calculate_latency(server_time: float, client_send_time: float) -> void:
 	var now = Time.get_ticks_msec() / 1000.0
 	latency_ms = int((now - client_send_time) * 1000.0)
 
-func _on_class_stats_received(stats_data: Dictionary) -> void:
-	class_stats_updated.emit(stats_data)
-
-func _on_skill_slots_received(slots_data: Array) -> void:
-	skill_slots_updated.emit(slots_data)
-

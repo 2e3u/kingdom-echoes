@@ -1,5 +1,5 @@
 extends Node
-class_name SharedDataModels
+## 作为 autoload 注册，不可使用 class_name
 
 ## 共享数据模型 — 客户端和服务端使用同一套数据结构
 ## 所有方法返回 Dictionary，通过 ENet RPC 以 JSON 序列化传输
