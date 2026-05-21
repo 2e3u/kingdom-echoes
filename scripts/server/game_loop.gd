@@ -17,6 +17,7 @@ var player_manager: PlayerManager = null
 var item_manager: ItemManager = null
 var crafting_manager: CraftingManager = null
 var build_manager: BuildManager = null
+var time_system: TimeSystem = null
 
 # 待处理输入缓冲: {player_id: input_dict}
 var _pending_inputs: Dictionary = {}
@@ -145,6 +146,12 @@ func _broadcast_world_state() -> void:
         return
 
     var snapshot = world_state_manager.get_full_snapshot()
+    if time_system:
+        snapshot["game_time"] = time_system.game_time_seconds
+        snapshot["day"] = time_system.day_number
+        snapshot["phase"] = time_system.current_phase
+        snapshot["game_hour"] = time_system.get_game_hour()
+        snapshot["light"] = time_system.get_light_multiplier()
     # 通过 NetworkRPC autoload 广播（NodePath 在所有客户端一致）
     NetworkRPC.rpc("_on_world_state", snapshot)
 

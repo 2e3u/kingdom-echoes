@@ -80,6 +80,7 @@ func _initialize_subsystems() -> void:
 	# 将子系统引用注入 GameLoop
 	game_loop.world_state_manager = world_state
 	game_loop.player_manager = player_manager
+	game_loop.time_system = time_system
 	# 将 world_state 引用注入子模块（BuildManager 也需要）
 	if game_loop.build_manager:
 		game_loop.build_manager.world_state_manager = world_state
