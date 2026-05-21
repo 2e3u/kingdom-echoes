@@ -89,12 +89,12 @@ func _make_tileset() -> TileSet:
 
 func _spawn_resources() -> void:
 	var defs = [
-		{"id": "tree", "item": "wood", "qty": 3, "color": Color.SADDLE_BROWN, "count": 100, "size": 22},
-		{"id": "copper_ore", "item": "copper_ore", "qty": 2, "color": Color(0.8, 0.5, 0.2), "count": 40, "size": 14},
-		{"id": "iron_ore", "item": "iron_ore", "qty": 2, "color": Color(0.5, 0.5, 0.55), "count": 25, "size": 16},
-		{"id": "stone_node", "item": "stone", "qty": 3, "color": Color.DIM_GRAY, "count": 50, "size": 16},
-		{"id": "herb_red", "item": "herb_red", "qty": 2, "color": Color(0.85, 0.2, 0.35), "count": 60, "size": 10},
-		{"id": "fiber_plant", "item": "fiber", "qty": 2, "color": Color(0.2, 0.75, 0.25), "count": 70, "size": 12},
+		{"id": "tree", "item": "wood", "qty": 3, "color": Color.SADDLE_BROWN, "count": 100, "size": 22, "harvest_type": SharedEnums.HarvestType.WOOD, "tool_tier": SharedEnums.ToolTier.NONE},
+		{"id": "copper_ore", "item": "copper_ore", "qty": 2, "color": Color(0.8, 0.5, 0.2), "count": 40, "size": 14, "harvest_type": SharedEnums.HarvestType.ORE, "tool_tier": SharedEnums.ToolTier.WOOD},
+		{"id": "iron_ore", "item": "iron_ore", "qty": 2, "color": Color(0.5, 0.5, 0.55), "count": 25, "size": 16, "harvest_type": SharedEnums.HarvestType.ORE, "tool_tier": SharedEnums.ToolTier.STONE},
+		{"id": "stone_node", "item": "stone", "qty": 3, "color": Color.DIM_GRAY, "count": 50, "size": 16, "harvest_type": -1, "tool_tier": SharedEnums.ToolTier.NONE},
+		{"id": "herb_red", "item": "herb_red", "qty": 2, "color": Color(0.85, 0.2, 0.35), "count": 60, "size": 10, "harvest_type": SharedEnums.HarvestType.HERB, "tool_tier": SharedEnums.ToolTier.NONE},
+		{"id": "fiber_plant", "item": "fiber", "qty": 2, "color": Color(0.2, 0.75, 0.25), "count": 70, "size": 12, "harvest_type": SharedEnums.HarvestType.FIBER, "tool_tier": SharedEnums.ToolTier.NONE},
 	]
 	var res_layer = Node2D.new()
 	res_layer.name = "Resources"
@@ -115,7 +115,7 @@ func _spawn_resources() -> void:
 			sprite.texture = ImageTexture.create_from_image(img)
 			res_layer.add_child(sprite)
 			resource_sprites[id] = sprite
-			resource_data[id] = {"name": ItemDatabase.get_item_name(d.item), "item_id": d.item, "quantity": d.qty, "depleted": false}
+			resource_data[id] = {"name": ItemDatabase.get_item_name(d.item), "item_id": d.item, "quantity": d.qty, "harvest_type": d.harvest_type, "tool_tier": d.tool_tier, "depleted": false}
 
 
 # ========== 玩家 ==========
@@ -203,7 +203,7 @@ func _create_hud() -> void:
 		"附近: --",
 		"时间: --",
 		"背包: 0 种物品",
-		"WASD=移动  E=采集  I=背包  C=制造面板",
+		"WASD=移动  E=采集  I=背包  C=制造  高级资源需工具",
 	]
 	for i in range(6):
 		var lbl = Label.new()
@@ -331,8 +331,22 @@ func _try_harvest() -> void:
 	if nearest_id.is_empty():
 		return
 
-	harvest_cooldown = 0.5
 	var res = resource_data[nearest_id]
+	var required_tier = res.get("tool_tier", 0)
+	var harvest_type = res.get("harvest_type", -1)
+
+	# 检查工具
+	if required_tier > SharedEnums.ToolTier.NONE:
+		var has_tool = _find_best_tool(harvest_type, required_tier)
+		if not has_tool:
+			var tier_names = {1: "木", 2: "石", 3: "铜", 4: "铁", 5: "秘银"}
+			_spawn_floating_text(player.position + Vector2(0, -20), "需要%s质工具!" % tier_names.get(required_tier, "?"))
+			harvest_cooldown = 0.4
+			return
+		# 消耗工具耐久
+		_consume_tool_durability(harvest_type)
+
+	harvest_cooldown = 0.5
 	res["depleted"] = true
 	var sprite: Sprite2D = resource_sprites[nearest_id]
 	sprite.modulate = Color(0.3, 0.3, 0.3, 0.5)
@@ -347,6 +361,33 @@ func _try_harvest() -> void:
 			sprite.modulate = Color.WHITE
 			res["depleted"] = false
 	)
+
+
+func _find_best_tool(harvest_type: int, min_tier: int) -> bool:
+	var inv = item_manager.get_inventory(1)
+	if not inv:
+		return false
+	for slot in inv.slots:
+		if slot.is_empty():
+			continue
+		var item_def = ItemDatabase.get_item(slot.get("item_id", ""))
+		if item_def.get("harvest_type", -1) == harvest_type and item_def.get("tool_tier", 0) >= min_tier and not slot.get("broken", false):
+			return true
+	return false
+
+
+func _consume_tool_durability(harvest_type: int) -> void:
+	var inv = item_manager.get_inventory(1)
+	if not inv:
+		return
+	for i in range(inv.slots.size()):
+		var slot = inv.slots[i]
+		if slot.is_empty():
+			continue
+		var item_def = ItemDatabase.get_item(slot.get("item_id", ""))
+		if item_def.get("harvest_type", -1) == harvest_type and item_def.get("tool_tier", 0) > 0:
+			item_manager.consume_durability(1, i, 1)
+			return
 
 
 # ========== 制造面板 ==========
