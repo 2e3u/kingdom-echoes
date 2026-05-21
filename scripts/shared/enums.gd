@@ -113,6 +113,60 @@ enum HarvestType {
 	FIBER,          # 采集纤维
 }
 
+# ---------- 职业类型 ----------
+enum ClassType {
+	NONE,           # 未选择
+	WARRIOR,        # 战士
+	ARCHER,         # 射手
+	MAGE,           # 法师
+	RANGER,         # 游侠
+}
+
+# ---------- 职业分支 ----------
+enum ClassBranch {
+	NONE,
+	# 战士分支
+	BERSERKER,      # 狂战士（高伤）
+	GUARDIAN,       # 守护者（高防）
+	# 射手分支
+	SNIPER,         # 狙击手（单点爆发）
+	SKIRMISHER,     # 游击者（AOE）
+	# 法师分支
+	ELEMENTALIST,   # 元素使（火水电雷）
+	ARCANIST,       # 秘术师（暗+控制）
+	# 游侠分支
+	ASSASSIN,       # 刺客（潜行暴击）
+	SURVIVALIST,    # 生存家（陷阱+驯兽）
+}
+
+# ---------- 属性类型 ----------
+enum AttributeType {
+	STRENGTH,       # 力量 — 物理伤害 +1%/点
+	AGILITY,        # 敏捷 — 暴击率 +0.2%/点，移速微增
+	CONSTITUTION,   # 体质 — 生命 +5/点，防御微增
+	INTELLIGENCE,   # 智力 — 魔法伤害 +1%/点
+	DEXTERITY,      # 灵巧 — 采集速度/制造品质提升
+	CHARISMA,       # 魅力 — 交易价格优惠
+}
+
+# ---------- 技能分类 ----------
+enum SkillCategory {
+	WEAPON_PRIMARY,     # 主武器技能（槽位1）
+	OFFHAND,            # 副手技能（槽位2）
+	GENERAL,            # 通用技能（槽位3-4）
+	ULTIMATE,           # 终极技能（终极槽）
+	PASSIVE,            # 被动技能
+}
+
+# ---------- 技能槽类型 ----------
+enum SkillSlotType {
+	PRIMARY_WEAPON,     # 槽1：主武器技能
+	OFFHAND,            # 槽2：副手技能
+	GENERAL_1,          # 槽3：通用技能
+	GENERAL_2,          # 槽4：通用技能
+	ULTIMATE,           # 终极槽
+}
+
 
 func _ready():
 	pass

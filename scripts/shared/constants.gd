@@ -57,6 +57,23 @@ const WORLD_CHUNK_SIZE: int = 32      # 区块大小（格）
 const BIOME_COUNT: int = 9
 const RESOURCE_DENSITY: float = 0.05  # 资源节点密度
 
+# ---------- 等级 ----------
+const MAX_LEVEL: int = 100
+const XP_CURVE_BASE: int = 100       # 1级→2级所需经验
+const XP_CURVE_GROWTH: float = 1.15  # 每级经验增长系数
+
+# ---------- 属性 ----------
+const ATTR_POINTS_PER_LEVEL: int = 5     # 每级自由属性点
+const ATTR_BASE_VALUE: int = 5            # 初始属性值
+const ATTR_MAX_PER_ATTR: int = 100        # 单项属性上限
+
+# ---------- 技能槽 ----------
+const SKILL_SLOT_COUNT: int = 5           # 总技能槽（含终极）
+const SKILL_GENERAL_SLOTS: int = 2        # 通用技能槽数量
+
+# ---------- 职业 ----------
+const CLASS_COUNT: int = 4
+
 
 func _ready():
 	pass
