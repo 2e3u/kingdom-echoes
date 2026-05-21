@@ -17,6 +17,8 @@ var gathering_controller: GatheringController = null
 
 ## 输入变化时发射，由 GameClientManager 接收并发送 RPC
 signal input_changed(input_data: Dictionary)
+## 攻击触发信号（鼠标左键）
+signal attack_triggered()
 
 func _ready() -> void:
 	print("[InputHandler] 输入处理器已初始化")
@@ -91,6 +93,8 @@ func get_predicted_position(current_pos: Vector2, speed: float) -> Vector2:
 
 
 func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("attack"):
+		attack_triggered.emit()
 	if event.is_action_pressed("interact"):
 		if gathering_controller:
 			gathering_controller.try_harvest(_get_local_player_position())

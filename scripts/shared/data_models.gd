@@ -14,6 +14,18 @@ class PlayerData:
 	var velocity: Vector2 = Vector2.ZERO
 	var health: int = 100
 	var score: int = 0
+	# 职业系统
+	var class_type: int = SharedEnums.ClassType.NONE
+	var class_branch: int = SharedEnums.ClassBranch.NONE
+	var level: int = 1
+	var xp: int = 0
+	# 6 属性
+	var base_attributes: Dictionary = {}    # {STRENGTH: 5, AGILITY: 5, ...}
+	var bonus_attributes: Dictionary = {}   # {STRENGTH: 0, AGILITY: 0, ...} — 自由分配
+	var free_points: int = 0                # 未分配的自由属性点
+	# 技能槽
+	var skill_slots: Array[Dictionary] = []  # 5 个槽位 [{skill_id, slot_type}]
+	var learned_skills: Array[String] = []   # 已学习技能 ID 列表
 	var is_connected: bool = false
 	var join_time: float = 0.0
 
@@ -298,6 +310,102 @@ class ResourceNode:
 		is_depleted = d.get("is_depleted", false)
 		depleted_at = d.get("depleted_at", 0.0)
 
+	# ---------- 角色属性（可序列化传输） ----------
+	class CharacterStats:
+		var class_type: int = SharedEnums.ClassType.NONE
+		var level: int = 1
+		var xp: int = 0
+		var free_points: int = 0
+		var base_attrs: Dictionary = {}
+		var bonus_attrs: Dictionary = {}
+		var equipped_stats: Dictionary = {}  # 装备附加属性
+
+		func get_total(attr: int) -> int:
+			var total: int = 0
+			total += base_attrs.get(attr, 0)
+			total += bonus_attrs.get(attr, 0)
+			total += equipped_stats.get(attr, 0)
+			return total
+
+		func to_dict() -> Dictionary:
+			return {
+				"class_type": class_type,
+				"level": level,
+				"xp": xp,
+				"free_points": free_points,
+				"base_attributes": base_attrs,
+				"bonus_attributes": bonus_attrs,
+				"equipped_stats": equipped_stats,
+			}
+
+		func from_dict(d: Dictionary) -> void:
+			class_type = d.get("class_type", SharedEnums.ClassType.NONE)
+			level = d.get("level", 1)
+			xp = d.get("xp", 0)
+			free_points = d.get("free_points", 0)
+			base_attrs = d.get("base_attributes", {})
+			bonus_attrs = d.get("bonus_attributes", {})
+			equipped_stats = d.get("equipped_stats", {})
+
+	# ---------- 技能定义 ----------
+	class SkillData:
+		var skill_id: String = ""
+		var name: String = ""
+		var category: int = SharedEnums.SkillCategory.GENERAL
+		var description: String = ""
+		var class_type: int = SharedEnums.ClassType.NONE
+		var class_branch: int = SharedEnums.ClassBranch.NONE
+		var required_level: int = 1
+		var cooldown: float = 1.0
+		var mana_cost: int = 0
+		var effects: Dictionary = {}
+
+		func to_dict() -> Dictionary:
+			return {
+				"skill_id": skill_id,
+				"name": name,
+				"category": category,
+				"description": description,
+				"class_type": class_type,
+				"class_branch": class_branch,
+				"required_level": required_level,
+				"cooldown": cooldown,
+				"mana_cost": mana_cost,
+				"effects": effects,
+			}
+
+		func from_dict(d: Dictionary) -> void:
+			skill_id = d.get("skill_id", "")
+			name = d.get("name", "")
+			category = d.get("category", SharedEnums.SkillCategory.GENERAL)
+			description = d.get("description", "")
+			class_type = d.get("class_type", SharedEnums.ClassType.NONE)
+			class_branch = d.get("class_branch", SharedEnums.ClassBranch.NONE)
+			required_level = d.get("required_level", 1)
+			cooldown = d.get("cooldown", 1.0)
+			mana_cost = d.get("mana_cost", 0)
+			effects = d.get("effects", {})
+
+	# ---------- 技能槽 ----------
+	class SkillSlot:
+		var slot_index: int = 0
+		var slot_type: int = SharedEnums.SkillSlotType.GENERAL_1
+		var skill_id: String = ""
+		var is_locked: bool = false
+
+		func to_dict() -> Dictionary:
+			return {
+				"slot_index": slot_index,
+				"slot_type": slot_type,
+				"skill_id": skill_id,
+				"is_locked": is_locked,
+			}
+
+		func from_dict(d: Dictionary) -> void:
+			slot_index = d.get("slot_index", 0)
+			slot_type = d.get("slot_type", SharedEnums.SkillSlotType.GENERAL_1)
+			skill_id = d.get("skill_id", "")
+			is_locked = d.get("is_locked", false)
 
 func _ready():
 	pass

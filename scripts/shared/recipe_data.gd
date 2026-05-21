@@ -39,6 +39,14 @@ static func _static_init() -> void:
     _add("craft_wooden_sword", "wooden_sword", 1, {"wood": 6}, SharedEnums.CraftStation.WORKBENCH)
     _add("craft_stone_sword", "stone_sword", 1, {"wood": 4, "stone": 5}, SharedEnums.CraftStation.WORKBENCH)
     _add("craft_iron_sword", "iron_sword", 1, {"wood": 2, "iron_ingot": 4}, SharedEnums.CraftStation.ANVIL)
+    _add("craft_iron_bow", "iron_bow", 1, {"wood": 4, "iron_ingot": 2, "fiber": 4}, SharedEnums.CraftStation.WORKBENCH)
+    _add("craft_mithril_spear", "mithril_spear", 1, {"wood": 4, "mithril_ingot": 4}, SharedEnums.CraftStation.ANVIL)
+
+    # 护甲
+    _add("craft_leather_armor", "leather_armor", 1, {"fiber": 8}, SharedEnums.CraftStation.LOOM)
+    _add("craft_iron_armor", "iron_armor", 1, {"iron_ingot": 6}, SharedEnums.CraftStation.ANVIL)
+    _add("craft_leather_helm", "leather_helm", 1, {"fiber": 4}, SharedEnums.CraftStation.LOOM)
+    _add("craft_iron_helm", "iron_helm", 1, {"iron_ingot": 3}, SharedEnums.CraftStation.ANVIL)
 
     # 消耗品
     _add("craft_bandage", "bandage", 3, {"fiber": 2}, SharedEnums.CraftStation.HAND)
