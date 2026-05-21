@@ -39,6 +39,15 @@ class PlayerData:
 			"velocity": {"x": velocity.x, "y": velocity.y},
 			"health": health,
 			"score": score,
+			"class_type": class_type,
+			"class_branch": class_branch,
+			"level": level,
+			"xp": xp,
+			"base_attributes": base_attributes,
+			"bonus_attributes": bonus_attributes,
+			"free_points": free_points,
+			"skill_slots": skill_slots,
+			"learned_skills": learned_skills,
 			"is_connected": is_connected,
 			"join_time": join_time,
 		}
@@ -54,6 +63,19 @@ class PlayerData:
 		velocity = Vector2(vel.get("x", 0.0), vel.get("y", 0.0))
 		health = d.get("health", 100)
 		score = d.get("score", 0)
+		class_type = d.get("class_type", SharedEnums.ClassType.NONE)
+		class_branch = d.get("class_branch", SharedEnums.ClassBranch.NONE)
+		level = d.get("level", 1)
+		xp = d.get("xp", 0)
+		base_attributes = d.get("base_attributes", {})
+		bonus_attributes = d.get("bonus_attributes", {})
+		free_points = d.get("free_points", 0)
+		skill_slots.clear()
+		for s in d.get("skill_slots", []):
+			skill_slots.append(s)
+		learned_skills.clear()
+		for sid in d.get("learned_skills", []):
+			learned_skills.append(sid)
 		is_connected = d.get("is_connected", false)
 		join_time = d.get("join_time", 0.0)
 

@@ -80,11 +80,6 @@ func _connect_signals() -> void:
 		if not input_handler.input_changed.is_connected(game_client.send_input):
 			input_handler.input_changed.connect(game_client.send_input)
 
-	# 连接 InputHandler 攻击信号
-	if input_handler:
-		if not input_handler.attack_triggered.is_connected(_on_attack_triggered):
-			input_handler.attack_triggered.connect(_on_attack_triggered)
-
 	# 连接 UIController 的信号
 	if ui_controller:
 		ui_controller.connect_requested.connect(_on_connect_requested)
@@ -266,35 +261,6 @@ func send_auth(player_name_str: String) -> void:
 	# 保留旧接口，实际不再使用
 	player_name = player_name_str
 	print("[Client] send_auth() 已弃用，请使用邮箱登录")
-
-
-func _on_attack_triggered() -> void:
-	if not is_connected or player_id <= 0:
-		return
-	if not game_client:
-		return
-	var my_pos = game_client.get_predicted_or_server_position()
-	var world_state = game_client.last_received_world_state
-	var players: Array = world_state.get("players", [])
-	var nearest_id: int = 0
-	var nearest_dist: float = 96.0  # 攻击范围
-
-	for p in players:
-		var pid = p.get("player_id", -1)
-		if pid <= 0 or pid == player_id:
-			continue
-		var pp = p.get("position", {"x": 0.0, "y": 0.0})
-		var ppos = Vector2(pp.get("x", 0.0), pp.get("y", 0.0))
-		var dist = my_pos.distance_to(ppos)
-		if dist < nearest_dist:
-			nearest_dist = dist
-			nearest_id = pid
-
-	if nearest_id > 0:
-		NetworkRPC.rpc_id(1, "_receive_combat_action", {
-			"target_id": nearest_id,
-		})
-		print("[Client] 攻击目标: player %d (距离 %.0f)" % [nearest_id, nearest_dist])
 
 
 func _process(_delta: float) -> void:

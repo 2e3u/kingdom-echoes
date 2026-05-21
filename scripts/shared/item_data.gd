@@ -9,7 +9,6 @@ static func _static_init() -> void:
     _register_materials()
     _register_tools()
     _register_weapons()
-    _register_armors()
     _register_consumables()
     _register_blocks()
     _register_special()
@@ -108,33 +107,26 @@ static func _make_tool(tool_name: String, tool_type: String, tier: int, durabili
     }
 
 static func _register_weapons() -> void:
-    items["wooden_sword"] = _make_weapon("木剑", "sword", 5, 1.0, 0.05, 1.5, 50)
-    items["stone_sword"] = _make_weapon("石剑", "sword", 8, 1.0, 0.05, 1.5, 80)
-    items["iron_sword"] = _make_weapon("铁剑", "sword", 12, 1.0, 0.05, 1.5, 150)
-    items["iron_bow"] = _make_weapon("铁弓", "bow", 10, 0.8, 0.10, 2.0, 120)
-    items["mithril_spear"] = _make_weapon("秘银矛", "spear", 18, 1.2, 0.08, 1.8, 300)
-
-static func _make_weapon(weapon_name: String, wpn_type: String, dmg: int, atk_spd: float, crit_c: float, crit_m: float, dur: int) -> Dictionary:
-    return {
-        "name": weapon_name, "category": SharedEnums.ItemCategory.WEAPON,
+    items["wooden_sword"] = {
+        "name": "木剑", "category": SharedEnums.ItemCategory.WEAPON,
         "stack_max": 1, "rarity": SharedEnums.Rarity.COMMON,
-        "durability_max": dur,
-        "stats": {"damage": dmg, "attack_speed": atk_spd, "crit_chance": crit_c, "crit_multiplier": crit_m},
-        "weapon_type": wpn_type,
+        "durability_max": 50,
+        "stats": {"damage": 5, "attack_speed": 1.0, "crit_chance": 0.05, "crit_multiplier": 1.5},
+        "weapon_type": "sword",
     }
-
-static func _register_armors() -> void:
-    items["leather_armor"] = _make_armor("皮革甲", "chest", 0.10, 60)
-    items["iron_armor"] = _make_armor("铁甲", "chest", 0.20, 120)
-    items["leather_helm"] = _make_armor("皮革盔", "head", 0.05, 40)
-    items["iron_helm"] = _make_armor("铁盔", "head", 0.10, 80)
-
-static func _make_armor(armor_name: String, slot: String, reduction: float, dur: int) -> Dictionary:
-    return {
-        "name": armor_name, "category": SharedEnums.ItemCategory.ARMOR,
+    items["stone_sword"] = {
+        "name": "石剑", "category": SharedEnums.ItemCategory.WEAPON,
         "stack_max": 1, "rarity": SharedEnums.Rarity.COMMON,
-        "durability_max": dur,
-        "armor_slot": slot, "damage_reduction": reduction,
+        "durability_max": 80,
+        "stats": {"damage": 8, "attack_speed": 1.0, "crit_chance": 0.05, "crit_multiplier": 1.5},
+        "weapon_type": "sword",
+    }
+    items["iron_sword"] = {
+        "name": "铁剑", "category": SharedEnums.ItemCategory.WEAPON,
+        "stack_max": 1, "rarity": SharedEnums.Rarity.UNCOMMON,
+        "durability_max": 150,
+        "stats": {"damage": 12, "attack_speed": 1.0, "crit_chance": 0.05, "crit_multiplier": 1.5},
+        "weapon_type": "sword",
     }
 
 static func _register_consumables() -> void:

@@ -17,7 +17,6 @@ var player_manager: PlayerManager = null
 var item_manager: ItemManager = null
 var crafting_manager: CraftingManager = null
 var build_manager: BuildManager = null
-var combat_manager: CombatManager = null
 
 # 待处理输入缓冲: {player_id: input_dict}
 var _pending_inputs: Dictionary = {}
@@ -50,8 +49,6 @@ func _ready() -> void:
 	add_child(build_manager)
 	if not NetworkRPC.build_action_received.is_connected(_on_build_action):
 		NetworkRPC.build_action_received.connect(_on_build_action)
-	if not NetworkRPC.combat_action_received.is_connected(_on_combat_action):
-		NetworkRPC.combat_action_received.connect(_on_combat_action)
 
 
 func start() -> void:
@@ -346,34 +343,3 @@ func _on_build_action(action_data: Dictionary, peer_id: int) -> void:
 				_sync_inventory(peer_id)
 			else:
 				NetworkRPC.rpc_id(peer_id, "_on_build_result", {"success": false, "message": "拆除失败"})
-
-# ---------- 战斗系统 ----------
-
-func _on_combat_action(action_data: Dictionary, peer_id: int) -> void:
-	if not combat_manager:
-		return
-	var target_id = action_data.get("target_id", 0)
-	if target_id <= 0:
-		return
-	var result = combat_manager.try_attack(peer_id, target_id)
-	# 广播战斗事件给所有客户端（伤害数字、特效等）
-	NetworkRPC.rpc("_on_combat_event", {
-		"attacker_id": peer_id,
-		"target_id": target_id,
-		"result": result,
-	})
-
-# 由外部（server.gd）在连接 CombatManager 信号后调用此方法建立广播链路
-func connect_combat_broadcasts() -> void:
-	if not combat_manager:
-		return
-	if not combat_manager.player_died.is_connected(_on_player_died_broadcast):
-		combat_manager.player_died.connect(_on_player_died_broadcast)
-	if not combat_manager.player_respawned.is_connected(_on_player_respawned_broadcast):
-		combat_manager.player_respawned.connect(_on_player_respawned_broadcast)
-
-func _on_player_died_broadcast(player_id: int, killer_id: int) -> void:
-	NetworkRPC.rpc("_on_player_died", player_id, killer_id)
-
-func _on_player_respawned_broadcast(player_id: int) -> void:
-	NetworkRPC.rpc("_on_player_respawned", player_id)

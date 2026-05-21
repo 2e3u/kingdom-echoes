@@ -14,7 +14,6 @@ var time_system: TimeSystem = null
 var auth: AuthManager = null
 var persistence: PersistenceManager = null
 var world_generator: WorldGenerator = null
-var combat_manager: CombatManager = null
 
 
 func _ready() -> void:
@@ -78,24 +77,12 @@ func _initialize_subsystems() -> void:
 	persistence = PersistenceManager.new()
 	add_child(persistence)
 
-	combat_manager = CombatManager.new()
-	combat_manager.name = "CombatManager"
-	add_child(combat_manager)
-
 	# 将子系统引用注入 GameLoop
 	game_loop.world_state_manager = world_state
 	game_loop.player_manager = player_manager
 	# 将 world_state 引用注入子模块（BuildManager 也需要）
 	if game_loop.build_manager:
 		game_loop.build_manager.world_state_manager = world_state
-
-	# 将子系统引用注入 CombatManager
-	combat_manager.player_manager = player_manager
-	combat_manager.world_state_manager = world_state
-	combat_manager.item_manager = game_loop.item_manager
-
-	# 将 CombatManager 引用注入 GameLoop
-	game_loop.combat_manager = combat_manager
 
 	# 将 WorldStateManager 引用注入 PersistenceManager（用于自动保存）
 	persistence.world_state_manager = world_state
@@ -115,10 +102,6 @@ func _connect_signals() -> void:
 	# 连接认证请求信号（来自 NetworkRPC autoload）
 	if not NetworkRPC.auth_request_received.is_connected(_on_auth_request):
 		NetworkRPC.auth_request_received.connect(_on_auth_request)
-
-	# 连接 CombatManager 死亡/重生 → GameLoop 广播
-	if game_loop:
-		game_loop.connect_combat_broadcasts()
 
 
 func _start_enet_server() -> bool:

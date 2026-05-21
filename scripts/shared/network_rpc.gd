@@ -69,11 +69,6 @@ func _receive_inventory_action(action_data: Dictionary) -> void:
 	var sender_id = multiplayer.get_remote_sender_id()
 	inventory_action_received.emit(action_data, sender_id)
 
-@rpc("any_peer", "call_remote", "reliable")
-func _receive_combat_action(action_data: Dictionary) -> void:
-	var sender_id = multiplayer.get_remote_sender_id()
-	combat_action_received.emit(action_data, sender_id)
-
 # ---------- 服务端 → 客户端 RPC ----------
 
 @rpc("authority", "call_remote", "reliable")
@@ -99,18 +94,6 @@ func _on_craft_result(result_data: Dictionary) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _on_build_result(result_data: Dictionary) -> void:
 	build_result_received.emit(result_data)
-
-@rpc("authority", "call_remote", "reliable")
-func _on_combat_event(event_data: Dictionary) -> void:
-	combat_event_received.emit(event_data)
-
-@rpc("authority", "call_remote", "reliable")
-func _on_player_died(player_id: int, killer_id: int) -> void:
-	player_died_received.emit(player_id, killer_id)
-
-@rpc("authority", "call_remote", "reliable")
-func _on_player_respawned(player_id: int) -> void:
-	player_respawned_received.emit(player_id)
 
 
 # ---------- 信号 ----------
@@ -144,8 +127,4 @@ signal block_placed_received(block_data: Dictionary)
 signal block_removed_received(grid_pos: Dictionary)
 signal craft_result_received(result_data: Dictionary)
 signal build_result_received(result_data: Dictionary)
-signal combat_action_received(action_data: Dictionary, peer_id: int)
-signal combat_event_received(event_data: Dictionary)
-signal player_died_received(player_id: int, killer_id: int)
-signal player_respawned_received(player_id: int)
 
