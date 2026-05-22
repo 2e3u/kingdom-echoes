@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ctof620heixng"
-path="res://.godot/imported/tile_grass_07.png-90543d74e0ed42ce7588bb9392dd2dfa.ctex"
+uid="uid://bwfv4db1rlcpa"
+path="res://.godot/imported/deco_flower.png-f69f33bb7038da3f257b902df5658121.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/tile_grass_07.png"
-dest_files=["res://.godot/imported/tile_grass_07.png-90543d74e0ed42ce7588bb9392dd2dfa.ctex"]
+source_file="res://assets/sprites/deco_flower.png"
+dest_files=["res://.godot/imported/deco_flower.png-f69f33bb7038da3f257b902df5658121.ctex"]
 
 [params]
 
