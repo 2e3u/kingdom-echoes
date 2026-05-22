@@ -23,14 +23,13 @@ var crafting_manager: CraftingManager = null
 var time_system: TimeSystem = null
 
 # 输入状态
-var harvesting: bool = false
-var harvest_target_id: String = ""
-var harvest_progress: float = 0.0
-var harvest_duration: float = 1.5
 var stations_unlocked: Array = [SharedEnums.CraftStation.HAND]
 
 # HUD 控制器
 var hud_controller: HUDController = null
+
+# 采集控制器
+var harvest_controller: HarvestController = null
 
 # 建造模式
 var build_mode: bool = false
@@ -56,6 +55,11 @@ func _ready() -> void:
 	hud_controller = HUDController.new()
 	hud_controller.setup(hud, item_manager, player, time_system, resource_sprites, resource_data, crafting_manager, stations_unlocked, _spawn_floating_text)
 	hud_controller.create()
+
+	# 创建并初始化 HarvestController
+	harvest_controller = HarvestController.new()
+	harvest_controller.setup(player, resource_sprites, resource_data, item_manager, hud_controller, _spawn_floating_text)
+	harvest_controller.harvest_completed.connect(_on_harvest_completed)
 
 	print("[Offline] 离线模式已启动 — WASD移动 J采集 B背包 C制造 V建造")
 
@@ -195,14 +199,14 @@ func _process(delta: float) -> void:
 	if camera:
 		camera.position = player.position
 
-	# 采集：J键按住采集（非建造模式）
+	# 采集
 	if not build_mode and not hud_controller.inventory_open and not hud_controller.craft_open:
 		if Input.is_action_just_pressed("build_place"):
-			_start_harvest()
-		if harvesting:
-			_update_harvest(delta)
-	elif harvesting:
-		_cancel_harvest()
+			harvest_controller.try_harvest()
+		if harvest_controller.is_harvesting():
+			harvest_controller.update(delta)
+	elif harvest_controller.is_harvesting():
+		harvest_controller.cancel()
 
 	if Input.is_action_just_pressed("inventory"):
 		hud_controller.toggle_inventory()
@@ -231,172 +235,10 @@ func _process(delta: float) -> void:
 		hud_controller.refresh_slots()
 
 
-# ========== 采集 ==========
+# ========== 采集回调 ==========
 
-func _find_nearest_resource() -> String:
-	var nearest_id = ""
-	var nearest_dist = 55.0
-	for rid in resource_sprites:
-		if resource_data.get(rid, {}).get("depleted", false):
-			continue
-		var dist = player.position.distance_to(resource_sprites[rid].position)
-		if dist < nearest_dist:
-			nearest_dist = dist
-			nearest_id = rid
-	return nearest_id
-
-
-func _start_harvest() -> void:
-	var rid = _find_nearest_resource()
-	if rid.is_empty():
-		return
-	var res = resource_data[rid]
-	var required_tier = res.get("tool_tier", 0)
-	var harvest_type = res.get("harvest_type", -1)
-
-	# 检查工具
-	var tool_tier = 0
-	if required_tier > SharedEnums.ToolTier.NONE:
-		tool_tier = _get_best_tool_tier(harvest_type)
-		if tool_tier < required_tier:
-			var tier_names = {1: "木", 2: "石", 3: "铜", 4: "铁", 5: "秘银"}
-			_spawn_floating_text(player.position + Vector2(0, -20), "需要%s质工具!" % tier_names.get(required_tier, "?"))
-			return
-
-	# 计算采集时间：基础1.5秒，工具越好越快
-	var speed_mult = float(required_tier + 1) / float(max(tool_tier, 0) + 1)
-	harvest_duration = 1.5 * speed_mult
-	harvest_target_id = rid
-	harvest_progress = 0.0
-	harvesting = true
-	hud_controller.show_harvest_bar(true)
-
-
-func _update_harvest(delta: float) -> void:
-	if not Input.is_action_pressed("build_place"):
-		_cancel_harvest()
-		return
-
-	# 检查目标是否仍在范围内
-	var rid = harvest_target_id
-	if rid.is_empty() or not resource_sprites.has(rid) or resource_data.get(rid, {}).get("depleted", false):
-		_cancel_harvest()
-		return
-	var dist = player.position.distance_to(resource_sprites[rid].position)
-	if dist > 60:
-		_cancel_harvest()
-		return
-
-	harvest_progress += delta / harvest_duration
-	hud_controller.update_harvest_bar(harvest_progress)
-
-	if harvest_progress >= 1.0:
-		_complete_harvest()
-
-
-func _cancel_harvest() -> void:
-	harvesting = false
-	harvest_target_id = ""
-	harvest_progress = 0.0
-	hud_controller.show_harvest_bar(false)
-
-
-func _complete_harvest() -> void:
-	var rid = harvest_target_id
-	var res = resource_data[rid]
-	res["depleted"] = true
-	var sprite: Sprite2D = resource_sprites[rid]
-
-	# 树变成树墩
-	var is_tree = res.get("item_id", "") == "wood"
-	if is_tree:
-		sprite.texture = TextureGen.get_stump_texture()
-	else:
-		sprite.modulate = Color(0.3, 0.3, 0.3, 0.5)
-
-	# 消耗工具耐久
-	var harvest_type = res.get("harvest_type", -1)
-	var required_tier = res.get("tool_tier", 0)
-	if required_tier > SharedEnums.ToolTier.NONE:
-		_consume_tool_durability(harvest_type)
-
-	# 物品放入快捷栏
-	var item_id = res.get("item_id", "")
-	var qty = res.get("quantity", 1)
-	_add_to_hotbar_first(item_id, qty)
-	_spawn_floating_text(sprite.position, "+%d %s" % [qty, res.get("name", item_id)])
-
-	# 不重生 — 资源一次性采集
-
-	_cancel_harvest()
-
-
-func _add_to_hotbar_first(item_id: String, qty: int) -> void:
-	var inv = item_manager.get_inventory(1)
-	if not inv:
-		item_manager.add_item(1, item_id, qty)
-		return
-	# 先尝试放入已有该物品的快捷栏格子
-	for i in range(9):
-		if i < inv.slots.size() and not inv.slots[i].is_empty():
-			if inv.slots[i].get("item_id", "") == item_id:
-				var max_stack = ItemDatabase.get_item(item_id).get("stack_max", 999)
-				var space = max_stack - inv.slots[i].get("quantity", 0)
-				if space > 0:
-					var add = min(qty, space)
-					inv.slots[i]["quantity"] = inv.slots[i].get("quantity", 0) + add
-					qty -= add
-					if qty <= 0:
-						return
-	# 找第一个空格子（优先快捷栏）
-	for i in range(9):
-		if i < inv.slots.size() and inv.slots[i].is_empty():
-			inv.slots[i] = {"item_id": item_id, "quantity": qty, "durability": 0, "broken": false}
-			return
-	# 兜底用 add_item
-	item_manager.add_item(1, item_id, qty)
-
-
-func _get_best_tool_tier(harvest_type: int) -> int:
-	var inv = item_manager.get_inventory(1)
-	if not inv:
-		return 0
-	var best = 0
-	for slot in inv.slots:
-		if slot.is_empty():
-			continue
-		var item_def = ItemDatabase.get_item(slot.get("item_id", ""))
-		if item_def.get("harvest_type", -1) == harvest_type and not slot.get("broken", false):
-			best = max(best, item_def.get("tool_tier", 0))
-	return best
-
-
-func _find_best_tool(harvest_type: int, min_tier: int) -> bool:
-	var inv = item_manager.get_inventory(1)
-	if not inv:
-		return false
-	for slot in inv.slots:
-		if slot.is_empty():
-			continue
-		var item_def = ItemDatabase.get_item(slot.get("item_id", ""))
-		if item_def.get("harvest_type", -1) == harvest_type and item_def.get("tool_tier", 0) >= min_tier and not slot.get("broken", false):
-			return true
-	return false
-
-
-func _consume_tool_durability(harvest_type: int) -> void:
-	var inv = item_manager.get_inventory(1)
-	if not inv:
-		return
-	for i in range(inv.slots.size()):
-		var slot = inv.slots[i]
-		if slot.is_empty():
-			continue
-		var item_def = ItemDatabase.get_item(slot.get("item_id", ""))
-		if item_def.get("harvest_type", -1) == harvest_type and item_def.get("tool_tier", 0) > 0:
-			item_manager.consume_durability(1, i, 1)
-			return
-
+func _on_harvest_completed(item_id: String, qty: int) -> void:
+	hud_controller.mark_dirty()
 
 # ========== 输入处理 ==========
 
