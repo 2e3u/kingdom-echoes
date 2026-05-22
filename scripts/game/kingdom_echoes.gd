@@ -213,9 +213,7 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("inventory"):
 		hud_controller.toggle_inventory()
 		if hud_controller.inventory_open and build_controller.build_mode:
-			build_controller.build_mode = false
-			if build_controller.ghost_sprite:
-				build_controller.ghost_sprite.visible = false
+			build_controller.toggle()
 
 	# 快捷栏选择 1-9
 	for i in range(9):
@@ -252,10 +250,11 @@ func _input(event: InputEvent) -> void:
 
 	if event.is_action_pressed("craft") and not event.is_echo():
 		var was_open = hud_controller.craft_open
-		if not was_open and build_controller.build_mode:
+		var was_build = build_controller.build_mode
+		if not was_open and was_build:
 			build_controller.toggle()
 		hud_controller.toggle_craft()
-		if was_open and build_controller.build_mode:
+		if was_open and was_build:
 			build_controller.toggle()
 
 	if event.is_action_pressed("build") and not event.is_echo():
@@ -285,8 +284,7 @@ func _input(event: InputEvent) -> void:
 			var idx = keycode - KEY_1
 			var blocks = build_controller.get_available_blocks()
 			if idx < blocks.size():
-				build_controller.selected_block_item = blocks[idx].item_id
-				build_controller._refresh_selection()
+				build_controller.select_block(blocks[idx].item_id)
 
 	# 非建造模式数字键选快捷栏
 	if not build_controller.build_mode and event is InputEventKey and event.pressed and not event.is_echo():
