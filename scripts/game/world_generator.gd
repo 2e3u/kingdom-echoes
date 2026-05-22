@@ -64,6 +64,7 @@ func _generate_biome_grid() -> void:
 
 	# FastNoiseLite — Simplex 2D
 	var noise = FastNoiseLite.new()
+	noise.seed = _rng.randi()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	noise.frequency = 0.015
 	noise.fractal_octaves = 3
@@ -148,6 +149,8 @@ func _build_tilemap() -> TileMap:
 	for y in range(_world_h):
 		for x in range(_world_w):
 			var biome = biome_grid[y][x]
+			if biome < 0 or biome >= _biome_configs.size():
+				continue
 			var variant_count = _biome_configs[biome].get("variant_count", 1)
 			var v = _rng.randi_range(0, variant_count - 1) if variant_count > 1 else 0
 			tm.set_cell(0, Vector2i(x, y), biome, Vector2i(v, 0))
@@ -163,6 +166,9 @@ func _build_tileset() -> TileSet:
 		if atlas_path.is_empty():
 			continue
 		var img = Image.load_from_file(atlas_path)
+		if img == null or img.is_empty():
+			push_error("WorldGenerator: Failed to load atlas: %s" % atlas_path)
+			continue
 		var tex = ImageTexture.create_from_image(img)
 		var src = TileSetAtlasSource.new()
 		src.texture = tex
@@ -183,6 +189,9 @@ func _spawn_resources(parent_node: Node2D) -> void:
 			continue
 		var density = d.get("density", 0.02)
 		var tex = d.get("texture", null)
+		if tex == null:
+			push_warning("WorldGenerator: skipping resource '%s' — no texture" % d.get("id", "?"))
+			continue
 
 		for y in range(_world_h):
 			for x in range(_world_w):
@@ -200,7 +209,7 @@ func _spawn_resources(parent_node: Node2D) -> void:
 				sprite.position = pos
 				sprite.centered = true
 				sprite.texture = tex
-				sprite.z_index = 1 if d["id"] != "tree" else 2
+				sprite.z_index = d.get("z_index", 1)
 				parent_node.add_child(sprite)
 
 				resource_sprites[id] = sprite
@@ -225,6 +234,9 @@ func _spawn_decorations(parent_node: Node2D) -> void:
 			continue
 		var density = d.get("density", 0.03)
 		var tex = d.get("texture", null)
+		if tex == null:
+			push_warning("WorldGenerator: skipping decoration '%s' — no texture" % d.get("id", "?"))
+			continue
 		var z_idx = d.get("z_index", 2)
 
 		for y in range(_world_h):
@@ -252,6 +264,7 @@ func _spawn_decorations(parent_node: Node2D) -> void:
 # ========== 入口 ==========
 
 func generate(parent_node: Node2D) -> void:
+	assert(_rng != null, "WorldGenerator: setup() must be called before generate()")
 	_generate_biome_grid()
 	var tilemap = _build_tilemap()
 	parent_node.add_child(tilemap)
