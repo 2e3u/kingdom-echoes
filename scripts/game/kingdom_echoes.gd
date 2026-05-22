@@ -340,14 +340,11 @@ func _build_decoration_defs() -> Array[Dictionary]:
 	return defs
 
 
-func _load_deco_texture(path: String) -> ImageTexture:
+func _load_deco_texture(path: String) -> Texture2D:
 	var full = "res://assets/sprites/%s" % path
 	if not FileAccess.file_exists(full):
 		return null
-	var img = Image.load_from_file(full)
-	if img == null or img.is_empty():
-		return null
-	var tex = ImageTexture.create_from_image(img)
+	var tex: Texture2D = load(full)
 	return tex
 
 

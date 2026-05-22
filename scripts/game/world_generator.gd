@@ -165,11 +165,10 @@ func _build_tileset() -> TileSet:
 		var atlas_path = cfg.get("atlas_path", "")
 		if atlas_path.is_empty():
 			continue
-		var img = Image.load_from_file(atlas_path)
-		if img == null or img.is_empty():
+		var tex: Texture2D = load(atlas_path)
+		if tex == null:
 			push_error("WorldGenerator: Failed to load atlas: %s" % atlas_path)
 			continue
-		var tex = ImageTexture.create_from_image(img)
 		var src = TileSetAtlasSource.new()
 		src.texture = tex
 		src.texture_region_size = Vector2i(_tile_size, _tile_size)
