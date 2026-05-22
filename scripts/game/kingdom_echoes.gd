@@ -4,9 +4,9 @@ class_name OfflineGame
 ## 离线单机模式 — 完整游戏循环（无需服务端）
 ## 包含：地形、资源采集、背包、制造、昼夜循环
 
-const WORLD_TILES_X: int = 80
-const WORLD_TILES_Y: int = 60
-const TILE_SIZE: int = 32
+const WORLD_TILES_X: int = 100
+const WORLD_TILES_Y: int = 75
+const TILE_SIZE: int = 48
 
 var player: CharacterBody2D = null
 var player_sprite: Sprite2D = null
@@ -34,11 +34,65 @@ var harvest_controller: HarvestController = null
 # 建造控制器
 var build_controller: BuildController = null
 
+# 世界生成器
+var world_generator: WorldGenerator = null
+
 
 func _ready() -> void:
 	rng.seed = 42
-	_build_ground()
-	_spawn_resources()
+
+	# 配置群落（对应 atlas PNG 路径 — 顺序必须匹配 BIOME_IDS）
+	var biome_configs: Array[Dictionary] = []
+	for biome_id in WorldGenerator.BIOME_IDS:
+		biome_configs.append({
+			"id": biome_id,
+			"atlas_path": "res://assets/sprites/atlas_%s.png" % biome_id,
+			"variant_count": 9,
+		})
+
+	# 配置资源（按群落分布 + 密度）
+	var resource_defs: Array[Dictionary] = [
+		{"id": "tree", "item": "wood", "qty": 3, "name": "树",
+		 "harvest_type": SharedEnums.HarvestType.WOOD, "tool_tier": SharedEnums.ToolTier.NONE,
+		 "biomes": ["forest_floor", "grass"], "density": 0.016, "z_index": 2,
+		 "texture": TextureGen.get_tree_texture()},
+		{"id": "copper_ore", "item": "copper_ore", "qty": 2, "name": "铜矿",
+		 "harvest_type": SharedEnums.HarvestType.ORE, "tool_tier": SharedEnums.ToolTier.WOOD,
+		 "biomes": ["stone_path", "sand"], "density": 0.004, "z_index": 1,
+		 "texture": TextureGen.get_ore_texture(Color(0.72, 0.42, 0.18), Color(0.95, 0.65, 0.2))},
+		{"id": "iron_ore", "item": "iron_ore", "qty": 2, "name": "铁矿",
+		 "harvest_type": SharedEnums.HarvestType.ORE, "tool_tier": SharedEnums.ToolTier.STONE,
+		 "biomes": ["stone_path", "dirt"], "density": 0.005, "z_index": 1,
+		 "texture": TextureGen.get_ore_texture(Color(0.45, 0.42, 0.48), Color(0.65, 0.62, 0.7))},
+		{"id": "stone_node", "item": "stone", "qty": 3, "name": "石头",
+		 "harvest_type": -1, "tool_tier": SharedEnums.ToolTier.NONE,
+		 "biomes": ["dirt", "stone_path"], "density": 0.008, "z_index": 1,
+		 "texture": TextureGen.get_stone_texture()},
+		{"id": "herb_red", "item": "herb_red", "qty": 2, "name": "药草",
+		 "harvest_type": SharedEnums.HarvestType.HERB, "tool_tier": SharedEnums.ToolTier.NONE,
+		 "biomes": ["grass", "swamp", "forest_floor"], "density": 0.010, "z_index": 1,
+		 "texture": TextureGen.get_herb_texture()},
+		{"id": "fiber_plant", "item": "fiber", "qty": 2, "name": "纤维植物",
+		 "harvest_type": SharedEnums.HarvestType.FIBER, "tool_tier": SharedEnums.ToolTier.NONE,
+		 "biomes": ["grass", "swamp"], "density": 0.008, "z_index": 1,
+		 "texture": TextureGen.get_fiber_texture()},
+	]
+
+	# 装饰物（先用 TextureGen 占位，后续切换 ComfyUI）
+	var decoration_defs: Array[Dictionary] = _build_decoration_defs()
+
+	# 创建 WorldGenerator 并生成世界
+	world_generator = WorldGenerator.new()
+	world_generator.setup(rng, TILE_SIZE, WORLD_TILES_X, WORLD_TILES_Y)
+	world_generator.set_biome_configs(biome_configs)
+	world_generator.set_resource_defs(resource_defs)
+	world_generator.set_decoration_defs(decoration_defs)
+	world_generator.generate(self)
+
+	# 从 WorldGenerator 获取资源引用
+	resource_sprites = world_generator.resource_sprites
+	resource_data = world_generator.resource_data
+
 	_create_player()
 	_setup_camera()
 	_init_systems()
@@ -64,59 +118,6 @@ func _ready() -> void:
 		{"TILE_SIZE": TILE_SIZE, "WORLD_TILES_X": WORLD_TILES_X, "WORLD_TILES_Y": WORLD_TILES_Y})
 
 	print("[Offline] 离线模式已启动 — WASD移动 J采集 B背包 C制造 V建造")
-
-
-# ========== 地形 ==========
-
-func _build_ground() -> void:
-	var tm = TileMap.new()
-	tm.name = "Ground"
-	tm.tile_set = TextureGen.make_tileset()
-	for x in range(-10, WORLD_TILES_X + 10):
-		for y in range(-10, WORLD_TILES_Y + 10):
-			var biome = int((sin(x * 0.12) * cos(y * 0.1) + 1.0) * 1.5)
-			tm.set_cell(0, Vector2i(x, y), biome, Vector2i(0, 0))
-	add_child(tm)
-
-
-# ========== 资源生成 ==========
-
-func _spawn_resources() -> void:
-	var defs = [
-		{"id": "tree", "item": "wood", "qty": 3, "color": Color.SADDLE_BROWN, "count": 200, "size": 22, "harvest_type": SharedEnums.HarvestType.WOOD, "tool_tier": SharedEnums.ToolTier.NONE},
-		{"id": "copper_ore", "item": "copper_ore", "qty": 2, "color": Color(0.8, 0.5, 0.2), "count": 80, "size": 14, "harvest_type": SharedEnums.HarvestType.ORE, "tool_tier": SharedEnums.ToolTier.WOOD},
-		{"id": "iron_ore", "item": "iron_ore", "qty": 2, "color": Color(0.5, 0.5, 0.55), "count": 100, "size": 16, "harvest_type": SharedEnums.HarvestType.ORE, "tool_tier": SharedEnums.ToolTier.STONE},
-		{"id": "stone_node", "item": "stone", "qty": 3, "color": Color.DIM_GRAY, "count": 50, "size": 16, "harvest_type": -1, "tool_tier": SharedEnums.ToolTier.NONE},
-		{"id": "herb_red", "item": "herb_red", "qty": 2, "color": Color(0.85, 0.2, 0.35), "count": 120, "size": 10, "harvest_type": SharedEnums.HarvestType.HERB, "tool_tier": SharedEnums.ToolTier.NONE},
-		{"id": "fiber_plant", "item": "fiber", "qty": 2, "color": Color(0.2, 0.75, 0.25), "count": 140, "size": 12, "harvest_type": SharedEnums.HarvestType.FIBER, "tool_tier": SharedEnums.ToolTier.NONE},
-	]
-	var res_layer = Node2D.new()
-	res_layer.name = "Resources"
-	add_child(res_layer)
-
-	for d in defs:
-		var tex: ImageTexture = null
-		match d.id:
-			"tree": tex = TextureGen.get_tree_texture()
-			"stone_node": tex = TextureGen.get_stone_texture()
-			"copper_ore": tex = TextureGen.get_ore_texture(Color(0.72, 0.42, 0.18), Color(0.95, 0.65, 0.2))
-			"iron_ore": tex = TextureGen.get_ore_texture(Color(0.45, 0.42, 0.48), Color(0.65, 0.62, 0.7))
-			"herb_red": tex = TextureGen.get_herb_texture()
-			"fiber_plant": tex = TextureGen.get_fiber_texture()
-		for _i in range(d.count):
-			var pos = Vector2(
-				rng.randf_range(4, WORLD_TILES_X - 4) * TILE_SIZE,
-				rng.randf_range(4, WORLD_TILES_Y - 4) * TILE_SIZE,
-			)
-			var id = "%s_%d" % [d.id, resource_sprites.size()]
-			var sprite = Sprite2D.new()
-			sprite.position = pos
-			sprite.centered = true
-			sprite.texture = tex
-			sprite.z_index = 2 if d.id == "tree" else 1
-			res_layer.add_child(sprite)
-			resource_sprites[id] = sprite
-			resource_data[id] = {"name": ItemDatabase.get_item_name(d.item), "item_id": d.item, "quantity": d.qty, "harvest_type": d.harvest_type, "tool_tier": d.tool_tier, "depleted": false}
 
 
 # ========== 玩家 ==========
@@ -194,9 +195,15 @@ func _process(delta: float) -> void:
 	if Input.is_action_pressed("move_right"): dir.x += 1
 	if dir.length() > 0:
 		dir = dir.normalized()
-	player.position += dir * move_speed * delta
-	player.position.x = clamp(player.position.x, 64, (WORLD_TILES_X - 2) * TILE_SIZE)
-	player.position.y = clamp(player.position.y, 64, (WORLD_TILES_Y - 2) * TILE_SIZE)
+	var next_pos = player.position + dir * move_speed * delta
+	next_pos.x = clamp(next_pos.x, 64, (WORLD_TILES_X - 2) * TILE_SIZE)
+	next_pos.y = clamp(next_pos.y, 64, (WORLD_TILES_Y - 2) * TILE_SIZE)
+
+	# 水域阻挡
+	var target_gx = int(next_pos.x / TILE_SIZE)
+	var target_gy = int(next_pos.y / TILE_SIZE)
+	if world_generator and world_generator.get_biome_at(target_gx, target_gy) != "water":
+		player.position = next_pos
 
 	if camera:
 		camera.position = player.position
@@ -303,6 +310,41 @@ func _input(event: InputEvent) -> void:
 			hud_controller.update_hotbar_selection()
 
 
+
+
+# ========== 装饰物辅助 ==========
+
+func _build_decoration_defs() -> Array[Dictionary]:
+	var defs: Array[Dictionary] = []
+	var deco_specs = [
+		{"id": "flower", "biomes": ["grass", "forest_floor"], "density": 0.02, "z_index": 2, "tex_func": "get_flower_texture"},
+		{"id": "grass_tuft", "biomes": ["grass", "dirt", "swamp"], "density": 0.03, "z_index": 2, "tex_func": "get_grass_tuft_texture"},
+		{"id": "mushroom", "biomes": ["forest_floor", "swamp"], "density": 0.01, "z_index": 2, "tex_func": "get_mushroom_texture"},
+		{"id": "pebble", "biomes": ["dirt", "stone_path", "sand"], "density": 0.04, "z_index": 1, "tex_func": "get_pebble_texture"},
+		{"id": "rock_small", "biomes": ["stone_path", "dirt"], "density": 0.015, "z_index": 1, "tex_func": "get_rock_small_texture"},
+		{"id": "bush_small", "biomes": ["grass", "forest_floor"], "density": 0.015, "z_index": 3, "tex_func": "get_bush_small_texture"},
+		{"id": "berry_bush", "biomes": ["forest_floor", "swamp"], "density": 0.012, "z_index": 3, "tex_func": "get_berry_bush_texture"},
+		{"id": "leaf_pile", "biomes": ["forest_floor"], "density": 0.025, "z_index": 1, "tex_func": "get_leaf_pile_texture"},
+		{"id": "twig", "biomes": ["forest_floor", "grass", "swamp"], "density": 0.025, "z_index": 1, "tex_func": "get_twig_texture"},
+	]
+	for spec in deco_specs:
+		var tex = _load_deco_texture("deco_%s.png" % spec["id"], spec["tex_func"])
+		if tex:
+			defs.append({
+				"id": spec["id"],
+				"biomes": spec["biomes"],
+				"density": spec["density"],
+				"z_index": spec["z_index"],
+				"texture": tex,
+			})
+	return defs
+
+
+func _load_deco_texture(path: String, tex_func: String) -> ImageTexture:
+	var full = "res://assets/sprites/%s" % path
+	if FileAccess.file_exists(full):
+		return load(full)
+	return null
 
 
 # ========== 浮字 ==========
