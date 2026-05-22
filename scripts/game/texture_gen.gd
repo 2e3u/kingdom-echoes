@@ -6,8 +6,13 @@ class_name TextureGen
 
 const TILE_SIZE: int = 32
 
-static var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+static var _rng: RandomNumberGenerator = _create_rng()
 static var _tex_cache: Dictionary = {}
+
+static func _create_rng() -> RandomNumberGenerator:
+	var r = RandomNumberGenerator.new()
+	r.seed = 42
+	return r
 
 # ========== 像素辅助 ==========
 
@@ -129,7 +134,7 @@ static func get_stone_texture() -> ImageTexture:
 	return tex
 
 static func get_ore_texture(base_color: Color, spec_color: Color) -> ImageTexture:
-	var key = "ore_%s" % base_color.to_html()
+	var key = "ore_%s_%s" % [base_color.to_html(), spec_color.to_html()]
 	if _tex_cache.has(key): return _tex_cache[key]
 	var s = 18; var img = Image.create(s, s, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
