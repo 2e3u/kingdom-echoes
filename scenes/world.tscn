@@ -1,7 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://world000"]
-
-[node name="World" type="Node2D"]
-
-[node name="Map" type="TileMapLayer" parent="."]
-
-[node name="Players" type="Node2D" parent="."]
