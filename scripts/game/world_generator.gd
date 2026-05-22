@@ -77,9 +77,9 @@ func _generate_biome_grid() -> void:
 		# 纬度偏置
 		var lat_bias: float
 		if lat < -0.3:
-			lat_bias = lerpf(-0.3, -1.0, (lat + 0.3) / -0.7)  # 高纬：雪地+石路
+			lat_bias = lerpf(0.3, 1.0, (lat + 0.3) / -0.7)   # 高纬：雪地+石路
 		elif lat > 0.3:
-			lat_bias = lerpf(0.3, 1.0, (lat - 0.3) / 0.7)      # 低纬：沙漠+水+沼泽
+			lat_bias = lerpf(-0.3, -1.0, (lat - 0.3) / 0.7)   # 低纬：沙漠+水+沼泽
 		else:
 			lat_bias = 0.0                                        # 中纬：均匀
 
@@ -108,7 +108,7 @@ func _generate_biome_grid() -> void:
 			row.append(biome)
 		biome_grid.append(row)
 
-	# 边界过渡带：±2 格内 50% 用邻居群落
+	# 边界过渡带：±1 格内 50% 用邻居群落
 	_blend_edges()
 
 
