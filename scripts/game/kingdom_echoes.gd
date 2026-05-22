@@ -78,7 +78,7 @@ func _ready() -> void:
 		 "texture": TextureGen.get_fiber_texture()},
 	]
 
-	# 装饰物（先用 TextureGen 占位，后续切换 ComfyUI）
+	# 装饰物（等待 Task 5 ComfyUI 生成）
 	var decoration_defs: Array[Dictionary] = _build_decoration_defs()
 
 	# 创建 WorldGenerator 并生成世界
@@ -317,18 +317,18 @@ func _input(event: InputEvent) -> void:
 func _build_decoration_defs() -> Array[Dictionary]:
 	var defs: Array[Dictionary] = []
 	var deco_specs = [
-		{"id": "flower", "biomes": ["grass", "forest_floor"], "density": 0.02, "z_index": 2, "tex_func": "get_flower_texture"},
-		{"id": "grass_tuft", "biomes": ["grass", "dirt", "swamp"], "density": 0.03, "z_index": 2, "tex_func": "get_grass_tuft_texture"},
-		{"id": "mushroom", "biomes": ["forest_floor", "swamp"], "density": 0.01, "z_index": 2, "tex_func": "get_mushroom_texture"},
-		{"id": "pebble", "biomes": ["dirt", "stone_path", "sand"], "density": 0.04, "z_index": 1, "tex_func": "get_pebble_texture"},
-		{"id": "rock_small", "biomes": ["stone_path", "dirt"], "density": 0.015, "z_index": 1, "tex_func": "get_rock_small_texture"},
-		{"id": "bush_small", "biomes": ["grass", "forest_floor"], "density": 0.015, "z_index": 3, "tex_func": "get_bush_small_texture"},
-		{"id": "berry_bush", "biomes": ["forest_floor", "swamp"], "density": 0.012, "z_index": 3, "tex_func": "get_berry_bush_texture"},
-		{"id": "leaf_pile", "biomes": ["forest_floor"], "density": 0.025, "z_index": 1, "tex_func": "get_leaf_pile_texture"},
-		{"id": "twig", "biomes": ["forest_floor", "grass", "swamp"], "density": 0.025, "z_index": 1, "tex_func": "get_twig_texture"},
+		{"id": "flower", "biomes": ["grass", "forest_floor"], "density": 0.02, "z_index": 2},
+		{"id": "grass_tuft", "biomes": ["grass", "dirt", "swamp"], "density": 0.03, "z_index": 2},
+		{"id": "mushroom", "biomes": ["forest_floor", "swamp"], "density": 0.01, "z_index": 2},
+		{"id": "pebble", "biomes": ["dirt", "stone_path", "sand"], "density": 0.04, "z_index": 1},
+		{"id": "rock_small", "biomes": ["stone_path", "dirt"], "density": 0.015, "z_index": 1},
+		{"id": "bush_small", "biomes": ["grass", "forest_floor"], "density": 0.015, "z_index": 3},
+		{"id": "berry_bush", "biomes": ["forest_floor", "swamp"], "density": 0.012, "z_index": 3},
+		{"id": "leaf_pile", "biomes": ["forest_floor"], "density": 0.025, "z_index": 1},
+		{"id": "twig", "biomes": ["forest_floor", "grass", "swamp"], "density": 0.025, "z_index": 1},
 	]
 	for spec in deco_specs:
-		var tex = _load_deco_texture("deco_%s.png" % spec["id"], spec["tex_func"])
+		var tex = _load_deco_texture("deco_%s.png" % spec["id"])
 		if tex:
 			defs.append({
 				"id": spec["id"],
@@ -340,7 +340,7 @@ func _build_decoration_defs() -> Array[Dictionary]:
 	return defs
 
 
-func _load_deco_texture(path: String, tex_func: String) -> ImageTexture:
+func _load_deco_texture(path: String) -> ImageTexture:
 	var full = "res://assets/sprites/%s" % path
 	if FileAccess.file_exists(full):
 		return load(full)
