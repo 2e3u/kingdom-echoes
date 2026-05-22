@@ -342,9 +342,13 @@ func _build_decoration_defs() -> Array[Dictionary]:
 
 func _load_deco_texture(path: String) -> ImageTexture:
 	var full = "res://assets/sprites/%s" % path
-	if FileAccess.file_exists(full):
-		return load(full)
-	return null
+	if not FileAccess.file_exists(full):
+		return null
+	var img = Image.load_from_file(full)
+	if img == null or img.is_empty():
+		return null
+	var tex = ImageTexture.create_from_image(img)
+	return tex
 
 
 # ========== 浮字 ==========
