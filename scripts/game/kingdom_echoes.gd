@@ -27,50 +27,16 @@ var harvesting: bool = false
 var harvest_target_id: String = ""
 var harvest_progress: float = 0.0
 var harvest_duration: float = 1.5
-var inventory_open: bool = false
-var craft_open: bool = false
-var current_station: int = SharedEnums.CraftStation.HAND
 var stations_unlocked: Array = [SharedEnums.CraftStation.HAND]
-var hotbar_selected: int = 0
 
-# HUD 元素
-var hud: CanvasLayer = null
-# 底部快捷栏
-var hotbar_panel: Panel = null
-var hotbar_slots: Array[Panel] = []
-var hotbar_labels: Array[Label] = []
-var hotbar_icons: Array[TextureRect] = []
-# 背包面板（B键居中）
-var inv_panel: Panel = null
-var inv_grid: Array[Panel] = []
-var inv_grid_labels: Array[Label] = []
-var inv_grid_icons: Array[TextureRect] = []
-var inv_title: Label = null
-# 制造面板
-var craft_panel: Panel = null
-var craft_buttons: Array[Button] = []
-var craft_title_label: Label = null
-# 角落信息
-var corner_tl: Label = null  # 左上：时间+位置
-var corner_tr: Label = null  # 右上：附近资源
-# 提示
-var hint_label: Label = null
-
-# 采集进度条
-var harvest_bar_bg: ColorRect = null
-var harvest_bar_fg: ColorRect = null
-
-# 昼夜灯光
-var light_rect: ColorRect = null
+# HUD 控制器
+var hud_controller: HUDController = null
 
 # 建造模式
 var build_mode: bool = false
 var selected_block_item: String = ""
 var ghost_sprite: Sprite2D = null
 var placed_blocks: Dictionary = {}
-var build_bar: Panel = null
-var build_buttons: Array[Button] = []
-var build_label: Label = null
 
 
 func _ready() -> void:
@@ -80,7 +46,17 @@ func _ready() -> void:
 	_create_player()
 	_setup_camera()
 	_init_systems()
-	_create_hud()
+
+	# 创建 HUD CanvasLayer
+	var hud = CanvasLayer.new()
+	hud.name = "HUD"
+	add_child(hud)
+
+	# 创建并初始化 HUDController
+	hud_controller = HUDController.new()
+	hud_controller.setup(hud, item_manager, player, time_system, resource_sprites, resource_data, crafting_manager, stations_unlocked, _spawn_floating_text)
+	hud_controller.create()
+
 	print("[Offline] 离线模式已启动 — WASD移动 J采集 B背包 C制造 V建造")
 
 
@@ -196,178 +172,6 @@ func _init_systems() -> void:
 	add_child(time_system)
 
 
-# ========== HUD ==========
-
-func _create_hud() -> void:
-	hud = CanvasLayer.new()
-	hud.name = "HUD"
-	add_child(hud)
-
-	# === 底部快捷栏 ===
-	var screen_w = 1920; var screen_h = 1080
-	var bar_w = 480; var bar_h = 52
-	hotbar_panel = Panel.new()
-	hotbar_panel.position = Vector2((screen_w - bar_w) / 2, screen_h - bar_h - 4)
-	hotbar_panel.size = Vector2(bar_w, bar_h)
-	hotbar_panel.modulate = Color(0.08, 0.08, 0.08, 0.8)
-	hud.add_child(hotbar_panel)
-
-	for i in range(9):
-		var slot = Panel.new()
-		slot.position = Vector2(8 + i * 52, 5)
-		slot.size = Vector2(46, 42)
-		slot.modulate = Color(0.15, 0.15, 0.15, 0.9)
-		hotbar_panel.add_child(slot)
-		hotbar_slots.append(slot)
-
-		var lbl = Label.new()
-		lbl.position = Vector2(10 + i * 52, 5)
-		lbl.add_theme_font_size_override("font_size", 11)
-		lbl.add_theme_color_override("font_color", Color.WHITE)
-		lbl.size = Vector2(42, 40)
-		lbl.text = ""
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hotbar_panel.add_child(lbl)
-		hotbar_labels.append(lbl)
-
-		var icon = TextureRect.new()
-		icon.position = Vector2(10 + i * 52 + 3, 7)
-		icon.size = Vector2(16, 16)
-		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		hotbar_panel.add_child(icon)
-		hotbar_icons.append(icon)
-
-	# 快捷栏选中高亮
-	_update_hotbar_selection()
-
-	# === 背包面板 (B键居中) ===
-	var inv_w = 480; var inv_h = 360
-	inv_panel = Panel.new()
-	inv_panel.position = Vector2((screen_w - inv_w) / 2, (screen_h - inv_h) / 2 - 30)
-	inv_panel.size = Vector2(inv_w, inv_h)
-	inv_panel.modulate = Color(0.05, 0.05, 0.05, 0.92)
-	inv_panel.visible = false
-	hud.add_child(inv_panel)
-
-	inv_title = Label.new()
-	inv_title.text = "背包"
-	inv_title.position = Vector2((screen_w - inv_w) / 2 + 16, (screen_h - inv_h) / 2 - 30 + 10)
-	inv_title.add_theme_font_size_override("font_size", 20)
-	inv_title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
-	inv_title.visible = false
-	hud.add_child(inv_title)
-
-	# 背包格子 5列x4行
-	for row in range(4):
-		for col in range(5):
-			var idx = row * 5 + col
-			var slot = Panel.new()
-			slot.position = Vector2(16 + col * 92, 44 + row * 74)
-			slot.size = Vector2(84, 68)
-			slot.modulate = Color(0.15, 0.15, 0.15, 0.9)
-			inv_panel.add_child(slot)
-			inv_grid.append(slot)
-
-			var lbl = Label.new()
-			lbl.position = Vector2(20 + col * 92, 46 + row * 74)
-			lbl.add_theme_font_size_override("font_size", 11)
-			lbl.add_theme_color_override("font_color", Color.WHITE)
-			lbl.size = Vector2(76, 64)
-			lbl.text = ""
-			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			inv_panel.add_child(lbl)
-			inv_grid_labels.append(lbl)
-
-			var icon = TextureRect.new()
-			icon.position = Vector2(20 + col * 92 + 4, 48 + row * 74 + 4)
-			icon.size = Vector2(16, 16)
-			icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-			inv_panel.add_child(icon)
-			inv_grid_icons.append(icon)
-
-	# === 制造面板 (C键居中) ===
-	craft_panel = Panel.new()
-	var cw = 420; var ch = 420
-	craft_panel.position = Vector2((screen_w - cw) / 2, (screen_h - ch) / 2 - 30)
-	craft_panel.size = Vector2(cw, ch)
-	craft_panel.modulate = Color(0.05, 0.05, 0.05, 0.92)
-	craft_panel.visible = false
-	hud.add_child(craft_panel)
-
-	craft_title_label = Label.new()
-	craft_title_label.text = "制造 (手工)"
-	craft_title_label.position = Vector2((screen_w - cw) / 2 + 16, (screen_h - ch) / 2 - 30 + 10)
-	craft_title_label.add_theme_font_size_override("font_size", 20)
-	craft_title_label.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
-	craft_title_label.visible = false
-	hud.add_child(craft_title_label)
-	_refresh_craft_buttons()
-
-	# === 左上角：时间+位置 ===
-	corner_tl = Label.new()
-	corner_tl.position = Vector2(12, 10)
-	corner_tl.add_theme_font_size_override("font_size", 15)
-	corner_tl.add_theme_color_override("font_color", Color.WHITE)
-	corner_tl.text = ""
-	hud.add_child(corner_tl)
-
-	# === 右上角：附近资源 ===
-	corner_tr = Label.new()
-	corner_tr.position = Vector2(screen_w - 300, 10)
-	corner_tr.size = Vector2(288, 80)
-	corner_tr.add_theme_font_size_override("font_size", 14)
-	corner_tr.add_theme_color_override("font_color", Color.WHITE)
-	corner_tr.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	corner_tr.text = ""
-	hud.add_child(corner_tr)
-
-	# === 底部提示 ===
-	hint_label = Label.new()
-	hint_label.position = Vector2(16, screen_h - 24)
-	hint_label.add_theme_font_size_override("font_size", 13)
-	hint_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	hint_label.text = "WASD移动  J采集  B背包  C制造  V建造  ESC关闭"
-
-	# === 采集进度条 ===
-	harvest_bar_bg = ColorRect.new()
-	harvest_bar_bg.size = Vector2(200, 14)
-	harvest_bar_bg.position = Vector2((1920 - 200) / 2, 60)
-	harvest_bar_bg.color = Color(0.1, 0.1, 0.1, 0.8)
-	harvest_bar_bg.visible = false
-	hud.add_child(harvest_bar_bg)
-
-	harvest_bar_fg = ColorRect.new()
-	harvest_bar_fg.size = Vector2(0, 10)
-	harvest_bar_fg.position = Vector2((1920 - 200) / 2 + 2, 62)
-	harvest_bar_fg.color = Color(0.3, 0.8, 0.3)
-	harvest_bar_fg.visible = false
-	hud.add_child(harvest_bar_fg)
-	hud.add_child(hint_label)
-
-	# === 昼夜光效 ===
-	light_rect = ColorRect.new()
-	light_rect.size = Vector2(4000, 3000)
-	light_rect.position = Vector2(-1000, -1000)
-	light_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud.add_child(light_rect)
-
-	# === 建造选择栏 ===
-	build_bar = Panel.new()
-	build_bar.position = Vector2(620, 8)
-	build_bar.size = Vector2(220, 240)
-	build_bar.modulate = Color(0.05, 0.05, 0.05, 0.85)
-	build_bar.visible = false
-	hud.add_child(build_bar)
-
-	build_label = Label.new()
-	build_label.text = "建造  J放置 K回收  1-9切换"
-	build_label.position = Vector2(634, 14)
-	build_label.add_theme_font_size_override("font_size", 12)
-	build_label.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
-	build_label.visible = false
-	hud.add_child(build_label)
-
-
 # ========== 帧循环 ==========
 
 var move_speed: float = 300.0
@@ -392,7 +196,7 @@ func _process(delta: float) -> void:
 		camera.position = player.position
 
 	# 采集：J键按住采集（非建造模式）
-	if not build_mode and not inventory_open and not craft_open:
+	if not build_mode and not hud_controller.inventory_open and not hud_controller.craft_open:
 		if Input.is_action_just_pressed("build_place"):
 			_start_harvest()
 		if harvesting:
@@ -401,13 +205,17 @@ func _process(delta: float) -> void:
 		_cancel_harvest()
 
 	if Input.is_action_just_pressed("inventory"):
-		_toggle_inventory()
+		hud_controller.toggle_inventory()
+		if hud_controller.inventory_open and build_mode:
+			build_mode = false
+			if ghost_sprite:
+				ghost_sprite.visible = false
 
 	# 快捷栏选择 1-9
 	for i in range(9):
 		if Input.is_key_pressed(KEY_1 + i):
-			hotbar_selected = i
-			_update_hotbar_selection()
+			hud_controller.hotbar_selected = i
+			hud_controller.update_hotbar_selection()
 
 	# 昼夜循环
 	if time_system:
@@ -417,7 +225,10 @@ func _process(delta: float) -> void:
 	if build_mode:
 		_update_ghost_preview()
 
-	_update_hud()
+	# HUD 更新 — 轻量部分每帧，图标纹理仅在脏标记为 true 时刷新
+	hud_controller.update(build_mode)
+	if hud_controller.inventory_dirty:
+		hud_controller.refresh_slots()
 
 
 # ========== 采集 ==========
@@ -458,8 +269,7 @@ func _start_harvest() -> void:
 	harvest_target_id = rid
 	harvest_progress = 0.0
 	harvesting = true
-	harvest_bar_bg.visible = true
-	harvest_bar_fg.visible = true
+	hud_controller.show_harvest_bar(true)
 
 
 func _update_harvest(delta: float) -> void:
@@ -478,7 +288,7 @@ func _update_harvest(delta: float) -> void:
 		return
 
 	harvest_progress += delta / harvest_duration
-	harvest_bar_fg.size.x = harvest_progress * 196
+	hud_controller.update_harvest_bar(harvest_progress)
 
 	if harvest_progress >= 1.0:
 		_complete_harvest()
@@ -488,9 +298,7 @@ func _cancel_harvest() -> void:
 	harvesting = false
 	harvest_target_id = ""
 	harvest_progress = 0.0
-	harvest_bar_bg.visible = false
-	harvest_bar_fg.visible = false
-	harvest_bar_fg.size.x = 0
+	hud_controller.show_harvest_bar(false)
 
 
 func _complete_harvest() -> void:
@@ -590,27 +398,21 @@ func _consume_tool_durability(harvest_type: int) -> void:
 			return
 
 
-# ========== 制造面板 ==========
+# ========== 输入处理 ==========
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		_close_all_panels()
+		hud_controller.close_all()
+		if build_mode:
+			_toggle_build_mode()
 
 	if event.is_action_pressed("craft") and not event.is_echo():
-		craft_open = !craft_open
-		if craft_open:
-			inventory_open = false
-			inv_panel.visible = false
-			inv_title.visible = false
-			if build_mode:
-				_toggle_build_mode()
-			_refresh_craft_buttons()
-		else:
-			_close_all_panels()
-		craft_panel.visible = craft_open
-		craft_title_label.visible = craft_open
-		for btn in craft_buttons:
-			btn.visible = craft_open
+		var was_open = hud_controller.craft_open
+		if not was_open and build_mode:
+			_toggle_build_mode()
+		hud_controller.toggle_craft()
+		if was_open and build_mode:
+			_toggle_build_mode()
 
 	if event.is_action_pressed("build") and not event.is_echo():
 		_toggle_build_mode()
@@ -646,159 +448,18 @@ func _input(event: InputEvent) -> void:
 	if not build_mode and event is InputEventKey and event.pressed and not event.is_echo():
 		var keycode = (event as InputEventKey).keycode
 		if keycode >= KEY_1 and keycode <= KEY_9:
-			hotbar_selected = keycode - KEY_1
-			_update_hotbar_selection()
+			hud_controller.hotbar_selected = keycode - KEY_1
+			hud_controller.update_hotbar_selection()
 	# 滚轮切换快捷栏
-	if not build_mode and not inventory_open and not craft_open and event is InputEventMouseButton:
+	if not build_mode and not hud_controller.inventory_open and not hud_controller.craft_open and event is InputEventMouseButton:
 		var mb = event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-			hotbar_selected = (hotbar_selected - 1) % 9
-			_update_hotbar_selection()
+			hud_controller.hotbar_selected = (hud_controller.hotbar_selected - 1) % 9
+			hud_controller.update_hotbar_selection()
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			hotbar_selected = (hotbar_selected + 1) % 9
-			_update_hotbar_selection()
+			hud_controller.hotbar_selected = (hud_controller.hotbar_selected + 1) % 9
+			hud_controller.update_hotbar_selection()
 
-
-
-func _refresh_craft_buttons() -> void:
-	for btn in craft_buttons:
-		btn.queue_free()
-	craft_buttons.clear()
-
-	var cp = craft_panel.position
-	# 制造站切换按钮
-	var station_names = {SharedEnums.CraftStation.HAND: "手工", SharedEnums.CraftStation.WORKBENCH: "工作台",
-		SharedEnums.CraftStation.FURNACE: "熔炉", SharedEnums.CraftStation.ANVIL: "铁砧",
-		SharedEnums.CraftStation.ALCHEMY: "炼金"}
-	var station_order = [SharedEnums.CraftStation.HAND, SharedEnums.CraftStation.WORKBENCH,
-		SharedEnums.CraftStation.FURNACE, SharedEnums.CraftStation.ANVIL, SharedEnums.CraftStation.ALCHEMY]
-	var tab_x = cp.x + 16
-	for st in station_order:
-		if st not in stations_unlocked:
-			continue
-		var tab = Button.new()
-		tab.text = station_names.get(st, "?")
-		tab.position = Vector2(tab_x, cp.y + 40)
-		tab.size = Vector2(68, 28)
-		tab.add_theme_font_size_override("font_size", 12)
-		if st == current_station:
-			tab.add_theme_color_override("font_color", Color.YELLOW)
-			tab.disabled = true
-		else:
-			tab.add_theme_color_override("font_color", Color.WHITE)
-		tab.pressed.connect(_on_station_changed.bind(st))
-		tab.visible = craft_open
-		hud.add_child(tab)
-		craft_buttons.append(tab)
-		tab_x += 68
-
-	var recipes = RecipeDatabase.get_recipes_for_station(current_station)
-	var inv = item_manager.get_inventory(1)
-	var y_offset = cp.y + 76
-
-	for i in range(recipes.size()):
-		var recipe = recipes[i]
-		var mats = recipe.get("materials", {})
-		var can_craft = true
-		var mat_text_parts: Array[String] = []
-		for mat_id in mats:
-			var need = mats[mat_id]
-			var has = _count_item(mat_id)
-			mat_text_parts.append("%s %d/%d" % [ItemDatabase.get_item_name(mat_id), has, need])
-			if has < need:
-				can_craft = false
-		var mat_text = " + ".join(mat_text_parts)
-		var output_name = ItemDatabase.get_item_name(recipe.get("output_item_id", ""))
-		var output_qty = recipe.get("output_quantity", 1)
-
-		var btn = Button.new()
-		btn.text = "%s x%d  [%s]" % [output_name, output_qty, mat_text]
-		btn.position = Vector2(cp.x + 16, y_offset)
-		btn.size = Vector2(388, 30)
-		btn.add_theme_font_size_override("font_size", 13)
-		btn.disabled = not can_craft
-		if can_craft:
-			btn.add_theme_color_override("font_color", Color.GREEN)
-		btn.pressed.connect(_on_craft_button.bind(recipe.get("recipe_id", "")))
-		btn.visible = craft_open
-		hud.add_child(btn)
-		craft_buttons.append(btn)
-		y_offset += 34
-		if y_offset > cp.y + 380:
-			break
-
-
-func _on_station_changed(station: int) -> void:
-	current_station = station
-	_refresh_craft_buttons()
-
-
-func _on_craft_button(recipe_id: String) -> void:
-	var result = crafting_manager.try_craft(1, recipe_id, current_station)
-	if result.get("success", false):
-		var recipe = RecipeDatabase.get_recipe(recipe_id)
-		var output_id = recipe.get("output_item_id", "")
-		_spawn_floating_text(player.position + Vector2(0, -20), "制造: %s" % ItemDatabase.get_item_name(output_id))
-		# 检查是否解锁新工作站
-		var item_def = ItemDatabase.get_item(output_id)
-		var station_type = item_def.get("station_type", -1)
-		if station_type > 0 and station_type not in stations_unlocked:
-			stations_unlocked.append(station_type)
-			_spawn_floating_text(player.position + Vector2(0, -40), "解锁新工作站!")
-		_refresh_craft_buttons()
-	else:
-		_spawn_floating_text(player.position + Vector2(0, -20), "材料不足")
-
-
-# ========== HUD 辅助 ==========
-
-func _toggle_inventory() -> void:
-	inventory_open = !inventory_open
-	if inventory_open:
-		craft_open = false
-		build_mode = false
-		craft_panel.visible = false
-		craft_title_label.visible = false
-		for btn in craft_buttons:
-			btn.visible = false
-		build_bar.visible = false
-		build_label.visible = false
-		for btn in build_buttons:
-			btn.visible = false
-		if ghost_sprite:
-			ghost_sprite.visible = false
-	inv_panel.visible = inventory_open
-	inv_title.visible = inventory_open
-
-func _set_hint(text: String) -> void:
-	if hint_label:
-		hint_label.text = text
-
-func _close_all_panels() -> void:
-	inventory_open = false
-	craft_open = false
-	build_mode = false
-	inv_panel.visible = false
-	inv_title.visible = false
-	craft_panel.visible = false
-	craft_title_label.visible = false
-	for btn in craft_buttons:
-		btn.visible = false
-	build_bar.visible = false
-	build_label.visible = false
-	for btn in build_buttons:
-		btn.visible = false
-	if ghost_sprite:
-		ghost_sprite.visible = false
-	_set_hint("WASD移动 J采集 B背包 C制造 V建造")
-
-func _update_hotbar_selection() -> void:
-	for i in range(9):
-		if i < hotbar_slots.size():
-			if i == hotbar_selected:
-				hotbar_slots[i].modulate = Color(1, 1, 1, 0.5)
-			else:
-				hotbar_slots[i].modulate = Color(0.15, 0.15, 0.15, 0.9)
 
 
 # ========== 建造系统 ==========
@@ -806,13 +467,13 @@ func _update_hotbar_selection() -> void:
 func _toggle_build_mode() -> void:
 	build_mode = !build_mode
 	if build_mode:
-		inventory_open = false
-		craft_open = false
-		inv_panel.visible = false
-		inv_title.visible = false
-		craft_panel.visible = false
-		craft_title_label.visible = false
-		for btn in craft_buttons:
+		hud_controller.inventory_open = false
+		hud_controller.craft_open = false
+		hud_controller.inv_panel.visible = false
+		hud_controller.inv_title.visible = false
+		hud_controller.craft_panel.visible = false
+		hud_controller.craft_title_label.visible = false
+		for btn in hud_controller.craft_buttons:
 			btn.visible = false
 		if not ghost_sprite:
 			ghost_sprite = Sprite2D.new()
@@ -824,15 +485,15 @@ func _toggle_build_mode() -> void:
 		_refresh_build_selection()
 		ghost_sprite.visible = true
 		_spawn_floating_text(player.position + Vector2(0, -30), "[建造模式] J放置 K回收")
-		_set_hint("建造模式: J放置 K回收 1-9选方块 V退出")
+		hud_controller.set_hint("建造模式: J放置 K回收 1-9选方块 V退出")
 		print("[Offline] 建造模式开启 — J放置 K回收 1-9选方块 V退出")
 	else:
 		ghost_sprite.visible = false
-		build_bar.visible = false
-		build_label.visible = false
-		for btn in build_buttons:
+		hud_controller.build_bar.visible = false
+		hud_controller.build_label.visible = false
+		for btn in hud_controller.build_buttons:
 			btn.visible = false
-		_set_hint("WASD移动 J采集 B背包 C制造 V建造")
+		hud_controller.set_hint("WASD移动 J采集 B背包 C制造 V建造")
 		print("[Offline] 建造模式关闭")
 
 
@@ -856,9 +517,9 @@ func _get_available_blocks() -> Array:
 
 
 func _refresh_build_selection() -> void:
-	for btn in build_buttons:
+	for btn in hud_controller.build_buttons:
 		btn.queue_free()
-	build_buttons.clear()
+	hud_controller.build_buttons.clear()
 
 	var blocks = _get_available_blocks()
 	if blocks.is_empty():
@@ -882,12 +543,12 @@ func _refresh_build_selection() -> void:
 			btn.add_theme_color_override("font_color", Color.WHITE)
 		btn.pressed.connect(_select_block.bind(b.item_id))
 		btn.visible = build_mode
-		hud.add_child(btn)
-		build_buttons.append(btn)
+		hud_controller.hud.add_child(btn)
+		hud_controller.build_buttons.append(btn)
 		y += 26
 
-	build_bar.visible = build_mode
-	build_label.visible = build_mode
+	hud_controller.build_bar.visible = build_mode
+	hud_controller.build_label.visible = build_mode
 
 
 func _select_block(item_id: String) -> void:
@@ -896,9 +557,9 @@ func _select_block(item_id: String) -> void:
 
 
 func _is_mouse_over_build_bar(mouse_pos: Vector2) -> bool:
-	if not build_bar.visible:
+	if not hud_controller.build_bar.visible:
 		return false
-	var bar_rect = Rect2(build_bar.position, build_bar.size)
+	var bar_rect = Rect2(hud_controller.build_bar.position, hud_controller.build_bar.size)
 	return bar_rect.has_point(mouse_pos)
 
 
@@ -1002,17 +663,6 @@ func _try_remove_block() -> void:
 	_refresh_build_selection()
 
 
-func _count_item(item_id: String) -> int:
-	var inv = item_manager.get_inventory(1)
-	if not inv:
-		return 0
-	var total = 0
-	for slot in inv.slots:
-		if not slot.is_empty() and slot.get("item_id", "") == item_id:
-			total += slot.get("quantity", 0)
-	return total
-
-
 # ========== 浮字 ==========
 
 func _spawn_floating_text(pos: Vector2, text: String) -> void:
@@ -1027,74 +677,3 @@ func _spawn_floating_text(pos: Vector2, text: String) -> void:
 	tween.tween_property(lbl, "position:y", lbl.position.y - 30, 0.8)
 	tween.tween_property(lbl, "modulate:a", 0.0, 0.8)
 	tween.tween_callback(lbl.queue_free)
-
-
-# ========== HUD 更新 ==========
-
-func _update_hud() -> void:
-	var inv = item_manager.get_inventory(1)
-
-	# === 左上角：位置+时间 ===
-	var pos_text = "(%d, %d)" % [int(player.position.x / TILE_SIZE), int(player.position.y / TILE_SIZE)]
-	if time_system:
-		var h = int(time_system.get_game_hour()) % 24
-		var phase_names = {0: "清晨", 1: "白天", 2: "黄昏", 3: "夜晚"}
-		var phase = phase_names.get(time_system.current_phase, "?")
-		var build_status = " | [建造中]" if build_mode else ""
-		corner_tl.text = "第%d天 %02d:00 %s | %s%s" % [time_system.day_number, h, phase, pos_text, build_status]
-		if light_rect:
-			var light = time_system.get_light_multiplier()
-			light_rect.color = Color(0, 0, 0.1, (1.0 - light) * 0.5)
-
-	# === 右上角：附近资源 ===
-	var nearby = {}
-	for rid in resource_sprites:
-		if resource_data.get(rid, {}).get("depleted", false):
-			continue
-		var dist = player.position.distance_to(resource_sprites[rid].position)
-		if dist < 80:
-			var name = resource_data[rid].get("name", "?")
-			nearby[name] = nearby.get(name, 0) + 1
-	if nearby.is_empty():
-		corner_tr.text = ""
-	else:
-		var parts: Array[String] = []
-		for n in nearby:
-			parts.append("%s x%d" % [n, nearby[n]])
-		corner_tr.text = "\n".join(parts)
-
-	# === 底部快捷栏 ===
-	if inv:
-		for i in range(9):
-			if i < inv.slots.size() and not inv.slots[i].is_empty():
-				var slot = inv.slots[i]
-				var item_def = ItemDatabase.get_item(slot.get("item_id", ""))
-				var name = item_def.get("name", slot.get("item_id", ""))
-				var qty = slot.get("quantity", 0)
-				hotbar_labels[i].text = "%s\n%d" % [name, qty]
-				if i < hotbar_icons.size():
-					hotbar_icons[i].texture = TextureGen.get_item_icon(slot.get("item_id", ""))
-			else:
-				hotbar_labels[i].text = ""
-				if i < hotbar_icons.size():
-					hotbar_icons[i].texture = null
-
-	# === 背包面板 ===
-	if inventory_open and inv:
-		for i in range(20):
-			if i < inv.slots.size() and not inv.slots[i].is_empty():
-				var slot = inv.slots[i]
-				var item_def = ItemDatabase.get_item(slot.get("item_id", ""))
-				var name = item_def.get("name", slot.get("item_id", ""))
-				var qty = slot.get("quantity", 0)
-				var dur = slot.get("durability", 0)
-				var dur_text = " (耐久:%d)" % dur if dur > 0 else ""
-				inv_grid_labels[i].text = "%s\nx%d%s" % [name, qty, dur_text]
-				inv_grid[i].modulate = Color(0.2, 0.2, 0.2, 0.9) if i == hotbar_selected else Color(0.15, 0.15, 0.15, 0.9)
-				if i < inv_grid_icons.size():
-					inv_grid_icons[i].texture = TextureGen.get_item_icon(slot.get("item_id", ""))
-			else:
-				inv_grid_labels[i].text = ""
-				inv_grid[i].modulate = Color(0.15, 0.15, 0.15, 0.9)
-				if i < inv_grid_icons.size():
-					inv_grid_icons[i].texture = null
