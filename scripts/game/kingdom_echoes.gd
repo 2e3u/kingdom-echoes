@@ -31,11 +31,8 @@ var hud_controller: HUDController = null
 # 采集控制器
 var harvest_controller: HarvestController = null
 
-# 建造模式
-var build_mode: bool = false
-var selected_block_item: String = ""
-var ghost_sprite: Sprite2D = null
-var placed_blocks: Dictionary = {}
+# 建造控制器
+var build_controller: BuildController = null
 
 
 func _ready() -> void:
@@ -60,6 +57,11 @@ func _ready() -> void:
 	harvest_controller = HarvestController.new()
 	harvest_controller.setup(player, resource_sprites, resource_data, item_manager, hud_controller, _spawn_floating_text)
 	harvest_controller.harvest_completed.connect(_on_harvest_completed)
+
+	# 创建并初始化 BuildController
+	build_controller = BuildController.new()
+	build_controller.setup(player, item_manager, hud_controller, self, stations_unlocked, _spawn_floating_text,
+		{"TILE_SIZE": TILE_SIZE, "WORLD_TILES_X": WORLD_TILES_X, "WORLD_TILES_Y": WORLD_TILES_Y})
 
 	print("[Offline] 离线模式已启动 — WASD移动 J采集 B背包 C制造 V建造")
 
@@ -200,7 +202,7 @@ func _process(delta: float) -> void:
 		camera.position = player.position
 
 	# 采集
-	if not build_mode and not hud_controller.inventory_open and not hud_controller.craft_open:
+	if not build_controller.build_mode and not hud_controller.inventory_open and not hud_controller.craft_open:
 		if Input.is_action_just_pressed("build_place"):
 			harvest_controller.try_harvest()
 		if harvest_controller.is_harvesting():
@@ -210,10 +212,10 @@ func _process(delta: float) -> void:
 
 	if Input.is_action_just_pressed("inventory"):
 		hud_controller.toggle_inventory()
-		if hud_controller.inventory_open and build_mode:
-			build_mode = false
-			if ghost_sprite:
-				ghost_sprite.visible = false
+		if hud_controller.inventory_open and build_controller.build_mode:
+			build_controller.build_mode = false
+			if build_controller.ghost_sprite:
+				build_controller.ghost_sprite.visible = false
 
 	# 快捷栏选择 1-9
 	for i in range(9):
@@ -225,12 +227,12 @@ func _process(delta: float) -> void:
 	if time_system:
 		time_system._process(delta)
 
-	# 建造模式
-	if build_mode:
-		_update_ghost_preview()
+	# 建造预览
+	if build_controller.build_mode:
+		build_controller.update_preview()
 
 	# HUD 更新 — 轻量部分每帧，图标纹理仅在脏标记为 true 时刷新
-	hud_controller.update(build_mode)
+	hud_controller.update(build_controller.build_mode)
 	if hud_controller.inventory_dirty:
 		hud_controller.refresh_slots()
 
@@ -245,55 +247,55 @@ func _on_harvest_completed(item_id: String, qty: int) -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		hud_controller.close_all()
-		if build_mode:
-			_toggle_build_mode()
+		if build_controller.build_mode:
+			build_controller.toggle()
 
 	if event.is_action_pressed("craft") and not event.is_echo():
 		var was_open = hud_controller.craft_open
-		if not was_open and build_mode:
-			_toggle_build_mode()
+		if not was_open and build_controller.build_mode:
+			build_controller.toggle()
 		hud_controller.toggle_craft()
-		if was_open and build_mode:
-			_toggle_build_mode()
+		if was_open and build_controller.build_mode:
+			build_controller.toggle()
 
 	if event.is_action_pressed("build") and not event.is_echo():
-		_toggle_build_mode()
+		build_controller.toggle()
 
 	# 建造模式下滚轮 / 鼠标 / J / K
-	if build_mode and event is InputEventMouseButton:
+	if build_controller.build_mode and event is InputEventMouseButton:
 		var mb = event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_cycle_block_selection(1 if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1)
+			build_controller.cycle_selection(1 if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1)
 		elif mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-			if not _is_mouse_over_build_bar(mb.position):
-				_try_place_block()
+			if not build_controller._is_mouse_over_build_bar(mb.position):
+				build_controller.try_place()
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
-			if not _is_mouse_over_build_bar(mb.position):
-				_try_remove_block()
+			if not build_controller._is_mouse_over_build_bar(mb.position):
+				build_controller.try_remove()
 
-	if build_mode and event.is_action_pressed("build_place") and not event.is_echo():
-		_try_place_block()
-	if build_mode and event.is_action_pressed("build_remove") and not event.is_echo():
-		_try_remove_block()
+	if build_controller.build_mode and event.is_action_pressed("build_place") and not event.is_echo():
+		build_controller.try_place()
+	if build_controller.build_mode and event.is_action_pressed("build_remove") and not event.is_echo():
+		build_controller.try_remove()
 
 	# 建造模式数字键选方块
-	if build_mode and event is InputEventKey and event.pressed and not event.is_echo():
+	if build_controller.build_mode and event is InputEventKey and event.pressed and not event.is_echo():
 		var keycode = (event as InputEventKey).keycode
 		if keycode >= KEY_1 and keycode <= KEY_9:
 			var idx = keycode - KEY_1
-			var blocks = _get_available_blocks()
+			var blocks = build_controller.get_available_blocks()
 			if idx < blocks.size():
-				selected_block_item = blocks[idx].item_id
-				_refresh_build_selection()
+				build_controller.selected_block_item = blocks[idx].item_id
+				build_controller._refresh_selection()
 
 	# 非建造模式数字键选快捷栏
-	if not build_mode and event is InputEventKey and event.pressed and not event.is_echo():
+	if not build_controller.build_mode and event is InputEventKey and event.pressed and not event.is_echo():
 		var keycode = (event as InputEventKey).keycode
 		if keycode >= KEY_1 and keycode <= KEY_9:
 			hud_controller.hotbar_selected = keycode - KEY_1
 			hud_controller.update_hotbar_selection()
 	# 滚轮切换快捷栏
-	if not build_mode and not hud_controller.inventory_open and not hud_controller.craft_open and event is InputEventMouseButton:
+	if not build_controller.build_mode and not hud_controller.inventory_open and not hud_controller.craft_open and event is InputEventMouseButton:
 		var mb = event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 			hud_controller.hotbar_selected = (hud_controller.hotbar_selected - 1) % 9
@@ -303,206 +305,6 @@ func _input(event: InputEvent) -> void:
 			hud_controller.update_hotbar_selection()
 
 
-
-# ========== 建造系统 ==========
-
-func _toggle_build_mode() -> void:
-	build_mode = !build_mode
-	if build_mode:
-		hud_controller.inventory_open = false
-		hud_controller.craft_open = false
-		hud_controller.inv_panel.visible = false
-		hud_controller.inv_title.visible = false
-		hud_controller.craft_panel.visible = false
-		hud_controller.craft_title_label.visible = false
-		for btn in hud_controller.craft_buttons:
-			btn.visible = false
-		if not ghost_sprite:
-			ghost_sprite = Sprite2D.new()
-			ghost_sprite.name = "BuildGhost"
-			ghost_sprite.centered = true
-			ghost_sprite.z_index = 100
-			ghost_sprite.modulate = Color(1, 1, 1, 0.55)
-			add_child(ghost_sprite)
-		_refresh_build_selection()
-		ghost_sprite.visible = true
-		_spawn_floating_text(player.position + Vector2(0, -30), "[建造模式] J放置 K回收")
-		hud_controller.set_hint("建造模式: J放置 K回收 1-9选方块 V退出")
-		print("[Offline] 建造模式开启 — J放置 K回收 1-9选方块 V退出")
-	else:
-		ghost_sprite.visible = false
-		hud_controller.build_bar.visible = false
-		hud_controller.build_label.visible = false
-		for btn in hud_controller.build_buttons:
-			btn.visible = false
-		hud_controller.set_hint("WASD移动 J采集 B背包 C制造 V建造")
-		print("[Offline] 建造模式关闭")
-
-
-func _get_available_blocks() -> Array:
-	var inv = item_manager.get_inventory(1)
-	if not inv:
-		return []
-	var blocks: Array = []
-	var seen: Dictionary = {}
-	for slot in inv.slots:
-		if slot.is_empty():
-			continue
-		var item_id = slot.get("item_id", "")
-		if seen.has(item_id):
-			continue
-		var item_def = ItemDatabase.get_item(item_id)
-		if item_def.has("block_type") and slot.get("quantity", 0) > 0:
-			blocks.append({"item_id": item_id, "name": item_def.get("name", item_id), "block_type": item_def.get("block_type", 0)})
-			seen[item_id] = true
-	return blocks
-
-
-func _refresh_build_selection() -> void:
-	for btn in hud_controller.build_buttons:
-		btn.queue_free()
-	hud_controller.build_buttons.clear()
-
-	var blocks = _get_available_blocks()
-	if blocks.is_empty():
-		selected_block_item = ""
-		return
-
-	if selected_block_item.is_empty() or not blocks.any(func(b): return b.item_id == selected_block_item):
-		selected_block_item = blocks[0].item_id
-
-	var y = 38
-	for b in blocks:
-		var btn = Button.new()
-		btn.text = b.name
-		btn.position = Vector2(614, y)
-		btn.size = Vector2(172, 22)
-		btn.add_theme_font_size_override("font_size", 10)
-		if b.item_id == selected_block_item:
-			btn.add_theme_color_override("font_color", Color.YELLOW)
-			btn.disabled = true
-		else:
-			btn.add_theme_color_override("font_color", Color.WHITE)
-		btn.pressed.connect(_select_block.bind(b.item_id))
-		btn.visible = build_mode
-		hud_controller.hud.add_child(btn)
-		hud_controller.build_buttons.append(btn)
-		y += 26
-
-	hud_controller.build_bar.visible = build_mode
-	hud_controller.build_label.visible = build_mode
-
-
-func _select_block(item_id: String) -> void:
-	selected_block_item = item_id
-	_refresh_build_selection()
-
-
-func _is_mouse_over_build_bar(mouse_pos: Vector2) -> bool:
-	if not hud_controller.build_bar.visible:
-		return false
-	var bar_rect = Rect2(hud_controller.build_bar.position, hud_controller.build_bar.size)
-	return bar_rect.has_point(mouse_pos)
-
-
-func _cycle_block_selection(direction: int) -> void:
-	var blocks = _get_available_blocks()
-	if blocks.is_empty():
-		return
-	var idx = -1
-	for i in range(blocks.size()):
-		if blocks[i].item_id == selected_block_item:
-			idx = i
-			break
-	idx = (idx + direction) % blocks.size()
-	selected_block_item = blocks[idx].item_id
-	_refresh_build_selection()
-
-
-func _update_ghost_preview() -> void:
-	if not ghost_sprite or selected_block_item.is_empty():
-		return
-	var mouse_pos = get_global_mouse_position()
-	var grid_pos = (mouse_pos / TILE_SIZE).floor() * TILE_SIZE + Vector2(TILE_SIZE / 2.0, TILE_SIZE / 2.0)
-	# 限制在世界范围内
-	grid_pos.x = clamp(grid_pos.x, TILE_SIZE, (WORLD_TILES_X - 1) * TILE_SIZE)
-	grid_pos.y = clamp(grid_pos.y, TILE_SIZE, (WORLD_TILES_Y - 1) * TILE_SIZE)
-	ghost_sprite.position = grid_pos
-
-	var img = TextureGen.get_block_texture(selected_block_item).get_image()
-	ghost_sprite.texture = ImageTexture.create_from_image(img)
-
-	# 检查是否被占用
-	var grid_key = "%d_%d" % [int(grid_pos.x), int(grid_pos.y)]
-	if placed_blocks.has(grid_key):
-		ghost_sprite.modulate = Color(1, 0.3, 0.3, 0.55)
-	else:
-		ghost_sprite.modulate = Color(1, 1, 1, 0.55)
-
-
-func _try_place_block() -> void:
-	if selected_block_item.is_empty():
-		return
-	var grid_pos: Vector2
-	if ghost_sprite and ghost_sprite.visible:
-		grid_pos = ghost_sprite.position
-	else:
-		var mouse_pos = get_global_mouse_position()
-		grid_pos = (mouse_pos / TILE_SIZE).floor() * TILE_SIZE + Vector2(TILE_SIZE / 2.0, TILE_SIZE / 2.0)
-	grid_pos.x = clamp(grid_pos.x, TILE_SIZE, (WORLD_TILES_X - 1) * TILE_SIZE)
-	grid_pos.y = clamp(grid_pos.y, TILE_SIZE, (WORLD_TILES_Y - 1) * TILE_SIZE)
-
-	var grid_key = "%d_%d" % [int(grid_pos.x), int(grid_pos.y)]
-	if placed_blocks.has(grid_key):
-		return
-
-	var inv = item_manager.get_inventory(1)
-	if not inv:
-		return
-	if not item_manager.remove_item(1, selected_block_item, 1):
-		_spawn_floating_text(player.position + Vector2(0, -20), "缺少方块!")
-		return
-
-	var item_def = ItemDatabase.get_item(selected_block_item)
-	var block_type = item_def.get("block_type", 0)
-	var sprite = Sprite2D.new()
-	sprite.name = "Block_%s" % grid_key
-	sprite.position = grid_pos
-	sprite.centered = true
-	sprite.z_index = 1
-	sprite.texture = TextureGen.get_block_texture(selected_block_item)
-	add_child(sprite)
-	placed_blocks[grid_key] = {"item_id": selected_block_item, "sprite": sprite}
-
-	# 工作站解锁对应制造站
-	if block_type == SharedEnums.BlockType.WORKSTATION:
-		var station_type = item_def.get("station_type", -1)
-		if station_type > 0 and station_type not in stations_unlocked:
-			stations_unlocked.append(station_type)
-			_spawn_floating_text(grid_pos + Vector2(0, -20), "解锁工作站!")
-
-	_spawn_floating_text(grid_pos + Vector2(0, -16), "放置: %s" % item_def.get("name", selected_block_item))
-	_refresh_build_selection()
-
-
-func _try_remove_block() -> void:
-	var grid_pos: Vector2
-	if ghost_sprite and ghost_sprite.visible:
-		grid_pos = ghost_sprite.position
-	else:
-		var mouse_pos = get_global_mouse_position()
-		grid_pos = (mouse_pos / TILE_SIZE).floor() * TILE_SIZE + Vector2(TILE_SIZE / 2.0, TILE_SIZE / 2.0)
-	var grid_key = "%d_%d" % [int(grid_pos.x), int(grid_pos.y)]
-	if not placed_blocks.has(grid_key):
-		return
-	var block_info = placed_blocks[grid_key]
-	var sprite: Sprite2D = block_info.sprite
-	if is_instance_valid(sprite):
-		sprite.queue_free()
-	_spawn_floating_text(grid_pos + Vector2(0, -16), "回收: %s" % ItemDatabase.get_item_name(block_info.item_id))
-	item_manager.add_item(1, block_info.item_id, 1)
-	placed_blocks.erase(grid_key)
-	_refresh_build_selection()
 
 
 # ========== 浮字 ==========
