@@ -217,6 +217,12 @@ func _build_tileset() -> TileSet:
 		if tex == null:
 			push_error("WorldGenerator: Failed to load atlas: %s" % atlas_path)
 			continue
+		var source_rect: Rect2i = cfg.get("source_rect", Rect2i())
+		if source_rect.size.x > 0 and source_rect.size.y > 0:
+			tex = _crop_texture(tex, source_rect)
+			if tex == null:
+				push_error("WorldGenerator: Failed to crop atlas: %s" % atlas_path)
+				continue
 		var src = TileSetAtlasSource.new()
 		src.texture = tex
 		src.texture_region_size = Vector2i(_tile_size, _tile_size)
@@ -226,6 +232,18 @@ func _build_tileset() -> TileSet:
 		ts.add_source(src, i)
 	_cached_tileset = ts
 	return ts
+
+
+func _crop_texture(tex: Texture2D, source_rect: Rect2i) -> Texture2D:
+	var image = tex.get_image()
+	if image == null:
+		return null
+	var bounds = Rect2i(Vector2i.ZERO, image.get_size())
+	source_rect = source_rect.intersection(bounds)
+	if source_rect.size.x <= 0 or source_rect.size.y <= 0:
+		return null
+	var cropped = image.get_region(source_rect)
+	return ImageTexture.create_from_image(cropped)
 
 
 # ========== 资源 & 装饰 (按 chunk) ==========

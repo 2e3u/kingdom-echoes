@@ -52,12 +52,17 @@ func _ready() -> void:
 	var gemini_grass = "res://scripts/game/草坪.png"  # Gemini 生成的草地
 	for biome_id in WorldGenerator.BIOME_IDS:
 		var path = "res://scripts/game/atlas_%s.png" % biome_id
+		var variant_count = 16
+		var source_rect = Rect2i()
 		if not FileAccess.file_exists(path):
 			path = gemini_grass if FileAccess.file_exists(gemini_grass) else ""
+			variant_count = 1
+			source_rect = Rect2i(32, 32, TILE_SIZE, TILE_SIZE)
 		biome_configs.append({
 			"id": biome_id,
 			"atlas_path": path,
-			"variant_count": 16,  # 4×4 atlas
+			"variant_count": variant_count,
+			"source_rect": source_rect,
 		})
 
 	# 配置资源
