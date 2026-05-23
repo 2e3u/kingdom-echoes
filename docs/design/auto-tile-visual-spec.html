@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KingdomEchoes — Auto-Tile 瓦片集视觉规范</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #1a1410;
+    --surface: #231e18;
+    --border: #3a3028;
+    --text: #d4c8b8;
+    --muted: #8a7e70;
+    --accent: #c8a060;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.7;
+    padding: 0;
+  }
+
+  /* Header */
+  .hero {
+    background: linear-gradient(180deg, #1a1410 0%, #2a2018 50%, #1a1814 100%);
+    border-bottom: 2px solid var(--accent);
+    padding: 60px 40px 50px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(200,160,96,0.03) 2px, rgba(200,160,96,0.03) 4px);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-family: 'MedievalSharp', cursive;
+    font-size: 52px;
+    color: var(--accent);
+    letter-spacing: 6px;
+    margin-bottom: 10px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .hero .subtitle {
+    font-size: 15px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .hero .style-tag {
+    display: inline-block;
+    margin-top: 18px;
+    padding: 6px 20px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: 13px;
+    letter-spacing: 2px;
+    background: rgba(200,160,96,0.06);
+  }
+
+  /* Sections */
+  .container { max-width: 1200px; margin: 0 auto; padding: 40px 30px; }
+  section { margin-bottom: 60px; }
+
+  h2 {
+    font-family: 'MedievalSharp', cursive;
+    font-size: 28px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    color: #b8a888;
+    letter-spacing: 2px;
+    margin: 24px 0 12px;
+    text-transform: uppercase;
+  }
+  .section-desc {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  /* Color Palette Cards */
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .biome-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    transition: border-color 0.2s;
+  }
+  .biome-card:hover { border-color: var(--accent); }
+  .biome-card .name {
+    font-family: 'MedievalSharp', cursive;
+    font-size: 18px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+  .biome-card .name-en {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .swatch-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .swatch {
+    width: 36px; height: 36px;
+    border: 1px solid rgba(255,255,255,0.1);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .swatch .hex {
+    position: absolute;
+    bottom: -18px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .swatch-row.with-labels { margin-bottom: 20px; }
+  .swatch-label {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+    text-align: center;
+    width: 36px;
+  }
+
+  /* Atlas Layout */
+  .atlas-demo {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .atlas-grid-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+  .atlas-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 64px);
+    grid-template-rows: repeat(4, 64px);
+    gap: 2px;
+  }
+  .atlas-cell {
+    width: 64px; height: 64px;
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+    position: relative;
+    background: #1a1814;
+    line-height: 1.3;
+  }
+  .atlas-cell.center-tile { background: #2a2418; border-color: var(--accent); color: var(--accent); }
+  .atlas-cell.edge-tile { background: #24201a; border-color: #8a7060; color: #b8a088; }
+  .atlas-cell.corner-tile { background: #221e18; border-color: #706050; color: #a09078; }
+  .atlas-cell.inner-tile { background: #201e18; border-color: #5a8070; color: #90a898; }
+  .atlas-cell.iso-tile { background: #1e1a18; border-color: #806060; color: #a88888; }
+  .atlas-cell .coord {
+    position: absolute;
+    top: 3px; left: 5px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.2);
+  }
+  .cell-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .legend-dot {
+    width: 14px; height: 14px;
+    border: 1px solid;
+    flex-shrink: 0;
+  }
+
+  /* Bitmask diagram */
+  .bitmask-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+    margin-top: 16px;
+  }
+  .bitmask-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 80px);
+    grid-template-rows: repeat(3, 80px);
+    gap: 3px;
+    margin: 0 auto;
+    width: fit-content;
+  }
+  .bitmask-cell {
+    background: #1a1814;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    gap: 4px;
+  }
+  .bitmask-cell.current {
+    border-color: var(--accent);
+    border-width: 2px;
+    background: #2a2018;
+  }
+  .bitmask-cell.neighbor {
+    border-color: #5a4a38;
+  }
+  .bitmask-value {
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .bitmask-label {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  /* Style reference */
+  .style-mood {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .mood-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+  .mood-card h4 {
+    font-family: 'MedievalSharp', cursive;
+    font-size: 16px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+  .mood-card p {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* Tile preview mock */
+  .tile-preview-row {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+  }
+  .tile-preview {
+    width: 48px; height: 48px;
+    image-rendering: pixelated;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 12px;
+  }
+  .spec-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 2px solid var(--accent);
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+  .spec-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+  }
+  .spec-table tr:hover td { background: rgba(200,160,96,0.03); }
+
+  /* Responsive */
+  @media (max-width: 800px) {
+    .atlas-demo { flex-direction: column; }
+    .style-mood { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 32px; }
+  }
+
+  /* Canvas tiles */
+  canvas.tile-canvas {
+    image-rendering: pixelated;
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ HERO ═══════════ -->
+<div class="hero">
+  <h1>Kingdom Echoes</h1>
+  <div class="subtitle">Auto-Tile 瓦片集 · 视觉规范 v1.0</div>
+  <div class="style-tag">暗黑童话 · 中世纪挂毯 · 48×48 px</div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════ 1. 风格方向 ═══════════ -->
+<section>
+  <h2>§1 风格方向：「褪色挂毯」</h2>
+  <p class="section-desc">
+    不是鲜艳的卡通像素，也不是写实的暗黑地牢。取其中间：像被岁月冲刷过的中世纪挂毯——浓郁但不饱和，温暖但蒙着灰。
+    群落之间不是硬边切割，而是像颜料在织物上自然晕开。
+  </p>
+  <div class="style-mood">
+    <div class="mood-card">
+      <h4>色调哲学</h4>
+      <p>
+        所有颜色都混入 5-10% 的暖灰（#a09080），降低饱和度。高光不是纯白而是旧纸色（#e8dcc8），
+        阴影不是纯黑而是深棕（#1a1410）。整体像是透过羊皮纸看到的画面。
+      </p>
+    </div>
+    <div class="mood-card">
+      <h4>边界美学</h4>
+      <p>
+        群落交界处不画硬线。用 2-3 像素宽的半透明过渡带，像是水彩在纸上渗开。
+        草地→泥土的边界有零星的草丝伸入泥地，泥地→石路有散落的碎石。
+      </p>
+    </div>
+    <div class="mood-card">
+      <h4>细节密度</h4>
+      <p>
+        每个瓦片平均 15-22 种颜色（不是极简 4 色 GameBoy 风，也不是过度复杂的 32 色）。
+        主体用 4-6 色大色块定调，2-3 色细节点缀（草叶纹理、石子、裂纹），不做满铺图案。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 2. 配色方案 ═══════════ -->
+<section>
+  <h2>§2 八群落配色</h2>
+  <p class="section-desc">每个群落 5 色调色板：基调 → 亮部 → 暗部 → 点缀 → 边界过渡色。RGB 值为设计参考，实际用 ComfyUI 生成后再调。</p>
+  <div class="palette-grid" id="palettes"></div>
+</section>
+
+<!-- ═══════════ 3. Auto-Tile Atlas 布局 ═══════════ -->
+<section>
+  <h2>§3 Auto-Tile Atlas 布局</h2>
+  <p class="section-desc">
+    Godot 4-directional bitmask 标准。每个群落一张 4×4 atlas（16 格），共 8 张 = 128 个瓦片。
+    格子位置固定，Godot Terrain 系统根据邻居自动索引。
+  </p>
+
+  <div class="atlas-demo">
+    <!-- 4×4 Grid -->
+    <div class="atlas-grid-container">
+      <h3 style="margin-top:0">Atlas 4×4 布局</h3>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">坐标 (col, row)，实际像素位置 = col×48, row×48</p>
+      <div class="atlas-grid">
+        <div class="atlas-cell corner-tile"><span class="coord">0,0</span>外角<br>NW</div>
+        <div class="atlas-cell edge-tile"><span class="coord">1,0</span>上边<br>N</div>
+        <div class="atlas-cell corner-tile"><span class="coord">2,0</span>外角<br>NE</div>
+        <div class="atlas-cell inner-tile"><span class="coord">3,0</span>内角<br>NE-in</div>
+
+        <div class="atlas-cell edge-tile"><span class="coord">0,1</span>左边<br>W</div>
+        <div class="atlas-cell center-tile"><span class="coord">1,1</span>中心<br>CTR</div>
+        <div class="atlas-cell edge-tile"><span class="coord">2,1</span>右边<br>E</div>
+        <div class="atlas-cell inner-tile"><span class="coord">3,1</span>内角<br>SE-in</div>
+
+        <div class="atlas-cell corner-tile"><span class="coord">0,2</span>外角<br>SW</div>
+        <div class="atlas-cell edge-tile"><span class="coord">1,2</span>下边<br>S</div>
+        <div class="atlas-cell corner-tile"><span class="coord">2,2</span>外角<br>SE</div>
+        <div class="atlas-cell inner-tile"><span class="coord">3,2</span>内角<br>SW-in</div>
+
+        <div class="atlas-cell inner-tile"><span class="coord">0,3</span>内角<br>NW-in</div>
+        <div class="atlas-cell iso-tile"><span class="coord">1,3</span>孤岛<br>ISO</div>
+        <div class="atlas-cell iso-tile"><span class="coord">2,3</span>横桥<br>H</div>
+        <div class="atlas-cell iso-tile"><span class="coord">3,3</span>竖桥<br>V</div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="cell-legend">
+      <h3 style="margin-top:0">瓦片类型</h3>
+      <div class="legend-item"><div class="legend-dot" style="background:#2a2418;border-color:#c8a060;"></div> <span><b>中心 (1格)</b> — 四周同群落，纯地面纹理</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#24201a;border-color:#8a7060;"></div> <span><b>四边 (4格)</b> — 一侧邻异群落，边界线在边缘</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#221e18;border-color:#706050;"></div> <span><b>外角 (4格)</b> — 两相邻边为异群落，直角边界</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#201e18;border-color:#5a8070;"></div> <span><b>内角 (4格)</b> — 仅一角为异群落，凹角过渡</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1e1a18;border-color:#806060;"></div> <span><b>特殊 (3格)</b> — 孤岛/横桥/竖桥，少数情况</span></div>
+
+      <h3 style="margin-top:24px;">Bitmask 计算</h3>
+      <div class="bitmask-diagram">
+        <div class="bitmask-grid">
+          <div class="bitmask-cell neighbor">
+            <span class="bitmask-label">↖ 无关</span>
+          </div>
+          <div class="bitmask-cell neighbor">
+            <span class="bitmask-label">↑ 上</span>
+            <span class="bitmask-value">1</span>
+          </div>
+          <div class="bitmask-cell neighbor">
+            <span class="bitmask-label">↗ 无关</span>
+          </div>
+          <div class="bitmask-cell neighbor">
+            <span class="bitmask-label">← 左</span>
+            <span class="bitmask-value">8</span>
+          </div>
+          <div class="bitmask-cell current">
+            <span class="bitmask-label">当前格</span>
+            <span class="bitmask-value" style="font-size:11px;">sum</span>
+          </div>
+          <div class="bitmask-cell neighbor">
+            <span class="bitmask-label">→ 右</span>
+            <span class="bitmask-value">2</span>
+          </div>
+          <div class="bitmask-cell neighbor">
+            <span class="bitmask-label">↙ 无关</span>
+          </div>
+          <div class="bitmask-cell neighbor">
+            <span class="bitmask-label">↓ 下</span>
+            <span class="bitmask-value">4</span>
+          </div>
+          <div class="bitmask-cell neighbor">
+            <span class="bitmask-label">↘ 无关</span>
+          </div>
+        </div>
+        <p style="font-size:10px;color:var(--muted);margin-top:12px;text-align:center;">
+          4-directional bitmask：只检查上下左右。上=1 右=2 下=4 左=8 → sum 0~15 对应 16 种情况。<br>
+          Godot 自动算 bitmask 然后去 atlas 对应位置取瓦片。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 4. 瓦片生成规格 ═══════════ -->
+<section>
+  <h2>§4 生成规格表</h2>
+  <table class="spec-table">
+    <thead>
+      <tr><th>参数</th><th>旧值</th><th>新值</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>瓦片尺寸</td><td>48×48 px</td><td>48×48 px</td><td>不变</td></tr>
+      <tr><td>Atlas 布局</td><td>1×9 水平条带</td><td>4×4 网格 (192×192 px)</td><td>适配 Godot terrain bitmask</td></tr>
+      <tr><td>每群落瓦片数</td><td>9 variants</td><td>16 tiles（按 bitmask 位置）</td><td>每个位置一个，不随机</td></tr>
+      <tr><td>总瓦片数</td><td>72</td><td>128</td><td>8 群落 × 16</td></tr>
+      <tr><td>variant 策略</td><td>随机 9 选 1</td><td>每个 bitmask 位置 2-3 variant</td><td>扩展 atlas 列数，如 4×5=20 格</td></tr>
+      <tr><td>生成方式</td><td>ComfyUI SDXL 独立生成</td><td>ComfyUI SDXL + Aseprite 手修</td><td>AI 出底，手修边缘对齐</td></tr>
+      <tr><td>边界处理</td><td>无（纯随机 variant）</td><td>4-directional bitmask 自动</td><td>Godot Terrain 系统接管</td></tr>
+      <tr><td>总 atlas 文件</td><td>8 张</td><td>8 张（每群落一张 4×N）</td><td>或合并为一张大 texture</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════ 5. 生成流程 ═══════════ -->
+<section>
+  <h2>§5 生成 & 配置流程</h2>
+
+  <div class="style-mood">
+    <div class="mood-card">
+      <h4>Step 1 · AI 出底</h4>
+      <p>
+        修改 ComfyUI prompt：为每个群落生成 16 个独立 48×48 瓦片（不是一张大纹理切片）。
+        每个瓦片带上 bitmask 位置描述（"center tile of grass biome, surrounded by same grass" vs "north edge tile of grass biome, with dirt above"）。
+        每个位置生成 2-3 个候选。
+      </p>
+    </div>
+    <div class="mood-card">
+      <h4>Step 2 · 手修对齐</h4>
+      <p>
+        在 Aseprite 中打开相邻群落的对应瓦片（如 grass 的 south-edge + dirt 的 north-edge），
+        确保交界处像素颜色过渡自然。画 2-3px 过渡带。修完后按 4×N 排列拼成 atlas PNG。
+      </p>
+    </div>
+    <div class="mood-card">
+      <h4>Step 3 · Godot 配置</h4>
+      <p>
+        在 TileSet 编辑器里：导入 atlas → 创建 8 个 terrain → 给每个 tile 标记 terrain 类型 →
+        设置 bitmask 模式为 4-directional → 保存 .tres 文件。<br>
+        WorldGenerator 改为 set_cells_terrain_connect() 批量铺地形。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 6. 装饰物配色 ═══════════ -->
+<section>
+  <h2>§6 装饰物配色更新</h2>
+  <p class="section-desc">现有 9 种装饰物的建议色调调整，匹配「褪色挂毯」风格。</p>
+  <div class="palette-grid" id="deco-palettes"></div>
+</section>
+
+</div><!-- /container -->
+
+<script>
+// ─── Biome Palette Data ───
+const biomes = [
+  { id:'grass', zh:'草地', en:'Grass', colors:['#7a8a4a','#9aae5a','#5a6a32','#b8c878','#3a4a1e','#c8d4a0'], desc:'秋天的草色，不是翠绿而是黄绿。像旧挂毯上褪色的青苔。' },
+  { id:'dirt', zh:'泥土', en:'Dirt', colors:['#8a7058','#a08868','#6a5040','#b89878','#4a3828','#c8b098'], desc:'温暖的褐色土，混着细碎石子。阴影偏红棕而非灰。' },
+  { id:'sand', zh:'沙漠', en:'Sand', colors:['#b8a878','#d4c898','#988860','#e8d8b0','#786840','#f0e4c8'], desc:'褪色的金，不是明亮的黄沙。像旧羊皮纸的颜色。' },
+  { id:'snow', zh:'雪地', en:'Snow', colors:['#c8d0d8','#e0e8f0','#a8b0b8','#f0f4f8','#889098','#d8e0e8'], desc:'蓝灰调的白，不是纯白。阴影是淡蓝灰，反射天空的冷光。' },
+  { id:'swamp', zh:'沼泽', en:'Swamp', colors:['#4a5a38','#6a7a4a','#3a4a28','#8a9a5a','#2a3a1a','#5a6a42'], desc:'深沉的暗绿，水面上漂浮着藻类。点缀是病态的暗黄绿。' },
+  { id:'forest_floor', zh:'森林地面', en:'Forest Floor', colors:['#5a4a32','#7a6242','#3a2a1a','#8a7252','#2a1a0a','#9a8262'], desc:'落叶覆盖的深棕色。混着腐殖质的暗色和枯叶的橙褐。' },
+  { id:'stone_path', zh:'石路', en:'Stone Path', colors:['#7a7878','#9a9898','#5a5858','#b0a8a8','#3a3838','#c8c0c0'], desc:'灰调的石板路，不是冷灰而是暖灰。缝隙间有暗色苔痕。' },
+  { id:'water', zh:'水域', en:'Water', colors:['#4a6078','#6a88a0','#3a4a5a','#88a8c0','#2a3848','#a0c0d8'], desc:'深沉的蓝绿水，不透明。像旧挂毯上的河流，表面有编织纹理感。' }
+];
+
+const decos = [
+  { id:'flower', zh:'小花', colors:['#c88080','#e0a0a0','#a06060','#f0c0c0'], desc:'淡淡的干枯玫瑰色——不是鲜红' },
+  { id:'grass_tuft', zh:'草簇', colors:['#889a50','#a8b870','#687a38','#c0d090'], desc:'与草地同系但稍亮，作为点缀突出' },
+  { id:'mushroom', zh:'蘑菇', colors:['#c8b8a0','#e0d0b8','#a09078','#f0e8d8'], desc:'暖灰白的菌盖，有暗色斑点' },
+  { id:'pebble', zh:'小石子', colors:['#9a9088','#b8b0a8','#7a7068','#d0c8c0'], desc:'中性灰，散落在地面不抢眼' },
+  { id:'rock_small', zh:'小岩块', colors:['#8a8880','#a8a098','#686860','#c0b8b0'], desc:'略深于石子，有棱角感的纹理' },
+  { id:'bush_small', zh:'矮灌木', colors:['#6a7848','#8a9a60','#4a5830','#a0b878'], desc:'深草绿，比草地暗，形成层次' },
+  { id:'berry_bush', zh:'浆果丛', colors:['#5a6840','#7a8858','#3a4828','#c87070'], desc:'暗绿灌木 + 暗红浆果点缀' },
+  { id:'leaf_pile', zh:'落叶堆', colors:['#8a6040','#b08050','#6a4028','#d0a870'], desc:'橙褐调，森林地面的暖色点缀' },
+  { id:'twig', zh:'枯枝', colors:['#7a6858','#a08870','#5a4838','#c0a888'], desc:'干枯的木质色调，细条状' }
+];
+
+// ─── Render biome palettes ───
+const palettesDiv = document.getElementById('palettes');
+biomes.forEach(b => {
+  const card = document.createElement('div');
+  card.className = 'biome-card';
+  let swatches = '<div class="swatch-row">';
+  b.colors.forEach(c => { swatches += `<div class="swatch" style="background:${c};"><span class="hex">${c}</span></div>`; });
+  swatches += '</div>';
+  card.innerHTML = `
+    <div class="name">${b.zh}</div>
+    <div class="name-en">${b.en} · ${b.id}</div>
+    ${swatches}
+    <p style="font-size:11px;color:var(--muted);margin-top:20px;">${b.desc}</p>
+  `;
+  palettesDiv.appendChild(card);
+});
+
+// ─── Render deco palettes ───
+const decoDiv = document.getElementById('deco-palettes');
+decos.forEach(d => {
+  const card = document.createElement('div');
+  card.className = 'biome-card';
+  let swatches = '<div class="swatch-row">';
+  d.colors.forEach(c => { swatches += `<div class="swatch" style="background:${c};"><span class="hex">${c}</span></div>`; });
+  swatches += '</div>';
+  card.innerHTML = `
+    <div class="name">${d.zh}</div>
+    <div class="name-en">Decoration · ${d.id}</div>
+    ${swatches}
+    <p style="font-size:11px;color:var(--muted);margin-top:20px;">${d.desc}</p>
+  `;
+  decoDiv.appendChild(card);
+});
+</script>
+
+</body>
+</html>
