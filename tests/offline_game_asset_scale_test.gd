@@ -6,10 +6,12 @@ var _failed = false
 func _init() -> void:
 	var source = FileAccess.get_file_as_string("res://scripts/game/kingdom_echoes.gd")
 
-	_check(_definition_line(source, "tree").contains("\"scale\": 0.28"), "imported tree sprites should be scaled down from their source PNG size")
-	_check(_definition_line(source, "flower").contains("\"scale\": 0.35"), "imported flower sprites should be scaled down from their source PNG size")
-	_check(_definition_line(source, "grass_tuft").contains("\"scale\": 0.25"), "imported grass sprites should be scaled down from their source PNG size")
-	_check(_definition_line(source, "tall_grass").contains("\"scale\": 0.30"), "imported tall grass sprites should be scaled down from their source PNG size")
+	# 树木与花草使用的精灵贴图较大，必须缩放到原始 PNG 尺寸以下(scale 为 0.xx)，
+	# 避免在地图上显示得过于巨大。这里只校验"被缩小过"，不锁死具体数值，便于后续微调。
+	for id in ["tree_round", "tree_conifer", "flower", "grass_tuft", "tall_grass"]:
+		var definition = _definition_line(source, id)
+		_check(not definition.is_empty(), "%s should be configured" % id)
+		_check(definition.contains("\"scale\": 0."), "%s sprite should be scaled down (scale < 1.0)" % id)
 
 	quit(1 if _failed else 0)
 

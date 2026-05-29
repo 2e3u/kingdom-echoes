@@ -153,15 +153,14 @@ func _ready() -> void:
 	_create_world_layers()
 
 	# 配置群落（顺序必须匹配 BIOME_IDS）
-	# Gemini 生成的纹理优先；缺失的 fallback 到 grass
+	# 地形实际渲染走 layered tileset；这里的 atlas 仅为旧单层 tilemap 兼容保留，缺失则留空
 	var biome_configs: Array[Dictionary] = []
-	var gemini_grass = "res://scripts/game/草坪.png"  # Gemini 生成的草地
 	for biome_id in WorldGenerator.BIOME_IDS:
 		var path = "res://scripts/game/atlas_%s.png" % biome_id
 		var variant_count = 16
 		var source_rect = Rect2i()
 		if not FileAccess.file_exists(path):
-			path = gemini_grass if FileAccess.file_exists(gemini_grass) else ""
+			path = ""
 			variant_count = 1
 			source_rect = Rect2i(32, 32, TILE_SIZE, TILE_SIZE)
 		biome_configs.append({
