@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dymte16kk8jdx"
-path="res://.godot/imported/river_rules.png-0f8e882ade80f25d344873d8d60f9ad5.ctex"
+uid="uid://bggdqc4p67pq1"
+path="res://.godot/imported/knight_aligned.png-953781e2583efbc3d867a6351e92a852.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/river_rules.png"
-dest_files=["res://.godot/imported/river_rules.png-0f8e882ade80f25d344873d8d60f9ad5.ctex"]
+source_file="res://assets/characters/knight_aligned.png"
+dest_files=["res://.godot/imported/knight_aligned.png-953781e2583efbc3d867a6351e92a852.ctex"]
 
 [params]
 

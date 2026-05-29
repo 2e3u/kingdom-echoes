@@ -80,6 +80,11 @@ const FLOWER_TEXTURE_PATHS: Array[String] = [
 ]
 const TerrainChunkWorkerScript = preload("res://scripts/game/terrain_chunk_worker.gd")
 const PLAYER_SCENE = preload("res://scenes/player.tscn")
+const KNIGHT_SHEET_PATH := "res://assets/characters/knight_aligned.png"
+const KNIGHT_SHEET_COLS := 8
+const KNIGHT_SHEET_ROWS := 4
+# 精灵表每行对应的行走方向，按 S/D/W/A 顺序（第1行=下, 第2行=右, 第3行=上, 第4行=左）
+const KNIGHT_ROW_ANIMS := ["walk_down", "walk_right", "walk_up", "walk_left"]
 
 # ============ 可在 Inspector 实时调整的世界生成参数 ============
 # 打开 scenes/kingdom_echoes.tscn、选中根节点 OfflineGame，即可在右侧 Inspector 调这些值。
@@ -100,12 +105,13 @@ const PLAYER_SCENE = preload("res://scenes/player.tscn")
 @export_range(0.1, 0.6) var mixed_zone_width: float = 0.38
 
 var player: CharacterBody2D = null
-var player_sprite: Sprite2D = null
+var player_sprite: AnimatedSprite2D = null
 var camera: Camera2D = null
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var terrain_root: Node2D = null
 var object_root: Node2D = null
 var ecology_debug_overlay: EcologyDebugOverlay = null
+var _canvas_modulate: CanvasModulate = null  # 昼夜假光影：给整个世界画面叠加色调(不影响 HUD)
 
 # 资源节点（引用 WorldGenerator 内部字典）
 var resource_sprites: Dictionary = {}
@@ -333,6 +339,12 @@ func _create_world_layers() -> void:
 	terrain_root = Node2D.new()
 	terrain_root.name = "TerrainChunks"
 	add_child(terrain_root)
+
+	# 昼夜假光影：CanvasModulate 给世界画面整体染色，亮度/色温随时间变化
+	_canvas_modulate = CanvasModulate.new()
+	_canvas_modulate.name = "DayNightLight"
+	_canvas_modulate.color = Color(1, 1, 1)
+	add_child(_canvas_modulate)
 
 	ecology_debug_overlay = EcologyDebugOverlay.new()
 	ecology_debug_overlay.name = "EcologyDebugOverlay"
@@ -614,8 +626,82 @@ func _create_player() -> void:
 	player = PLAYER_SCENE.instantiate()
 	player.position = Vector2(50 * TILE_SIZE, 37 * TILE_SIZE)
 	player_sprite = player.get_node("Sprite")
-	player_sprite.texture = TextureGen.get_player_texture()
+	player_sprite.sprite_frames = _build_knight_frames()
+	player_sprite.play("idle")
 	object_root.add_child(player)
+
+
+## 从骑士精灵表(8列×4行)构建四方向行走动画。
+## 图尺寸非 128 整数倍，按比例四舍五入切整数帧边界，避免缩放导致像素模糊。
+func _build_knight_frames() -> SpriteFrames:
+	var tex: Texture2D = load(KNIGHT_SHEET_PATH)
+	var sf := SpriteFrames.new()
+	if tex == null:
+		return sf
+	var tw := tex.get_width()
+	var th := tex.get_height()
+	for row in range(KNIGHT_SHEET_ROWS):
+		var anim_name: String = KNIGHT_ROW_ANIMS[row] if row < KNIGHT_ROW_ANIMS.size() else "row_%d" % row
+		sf.add_animation(anim_name)
+		sf.set_animation_loop(anim_name, true)
+		sf.set_animation_speed(anim_name, 10.0)
+		var y0 := int(round(float(row) * th / KNIGHT_SHEET_ROWS))
+		var y1 := int(round(float(row + 1) * th / KNIGHT_SHEET_ROWS))
+		for col in range(KNIGHT_SHEET_COLS):
+			var x0 := int(round(float(col) * tw / KNIGHT_SHEET_COLS))
+			var x1 := int(round(float(col + 1) * tw / KNIGHT_SHEET_COLS))
+			var at := AtlasTexture.new()
+			at.atlas = tex
+			at.region = Rect2(x0, y0, x1 - x0, y1 - y0)
+			sf.add_frame(anim_name, at)
+	# 静止待机：用正面行走的第一帧
+	sf.add_animation("idle")
+	sf.set_animation_loop("idle", false)
+	if sf.has_animation("walk_down") and sf.get_frame_count("walk_down") > 0:
+		sf.add_frame("idle", sf.get_frame_texture("walk_down", 0))
+	return sf
+
+
+## 根据移动方向播放对应的行走动画；静止时切回待机。
+func _update_player_animation(dir: Vector2) -> void:
+	if player_sprite == null or player_sprite.sprite_frames == null:
+		return
+	if dir == Vector2.ZERO:
+		if player_sprite.animation != "idle":
+			player_sprite.play("idle")
+		return
+	var anim := "walk_down"
+	if absf(dir.x) > absf(dir.y):
+		anim = "walk_right" if dir.x > 0 else "walk_left"
+	else:
+		anim = "walk_down" if dir.y > 0 else "walk_up"
+	if not player_sprite.sprite_frames.has_animation(anim):
+		return
+	if player_sprite.animation != anim or not player_sprite.is_playing():
+		player_sprite.play(anim)
+
+
+# ========== 昼夜假光影 ==========
+
+## 根据时间系统的光照倍数与时段，平滑调整世界画面的色调与亮度。
+func _update_day_night_lighting(delta: float) -> void:
+	if _canvas_modulate == null or time_system == null:
+		return
+	var light = time_system.get_light_multiplier()  # 0.05(深夜) ~ 1.0(正午)
+	var hour = time_system.get_game_hour()
+	# 时段色温
+	var tint := Color(1.0, 1.0, 1.0)            # 白天：中性
+	if hour >= 17.0 and hour < 20.0:
+		tint = Color(1.0, 0.74, 0.52)           # 黄昏：暖橙
+	elif hour >= 20.0 or hour < 5.0:
+		tint = Color(0.55, 0.62, 0.95)          # 夜晚：冷蓝
+	elif hour >= 5.0 and hour < 7.0:
+		tint = Color(1.0, 0.82, 0.66)           # 黎明：微暖
+	# 把光照(0.05~1.0)映射到可见亮度(0.4~1.0)，保证夜晚也看得清
+	var vis = lerpf(0.4, 1.0, clampf(light, 0.0, 1.0))
+	var target = Color(tint.r * vis, tint.g * vis, tint.b * vis, 1.0)
+	# 平滑过渡，避免时段切换时画面突变
+	_canvas_modulate.color = _canvas_modulate.color.lerp(target, clampf(delta * 0.8, 0.0, 1.0))
 
 
 func _setup_camera() -> void:
@@ -663,6 +749,7 @@ func _process(delta: float) -> void:
 	if Input.is_action_pressed("move_right"): dir.x += 1
 	if dir.length() > 0:
 		dir = dir.normalized()
+	_update_player_animation(dir)
 	var next_pos = player.position + dir * move_speed * delta
 
 	# 水域阻挡（不再限制世界边界）
@@ -679,6 +766,8 @@ func _process(delta: float) -> void:
 
 	if camera:
 		camera.position = player.position
+
+	_update_day_night_lighting(delta)
 
 	# 采集
 	if not build_controller.build_mode and not hud_controller.inventory_open and not hud_controller.craft_open:
