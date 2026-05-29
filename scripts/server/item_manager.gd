@@ -32,6 +32,30 @@ func get_inventory_dict(player_id: int) -> Dictionary:
 		return inv.to_dict()
 	return {}
 
+## 存档用：把背包导出为可 JSON 序列化的数组（每格 {item_id, quantity}，空格为 {}）
+func export_inventory(player_id: int) -> Array:
+	var inv = get_inventory(player_id)
+	if not inv:
+		return []
+	var out: Array = []
+	for slot in inv.slots:
+		if slot is Dictionary and slot.has("item_id"):
+			out.append({"item_id": str(slot["item_id"]), "quantity": int(slot.get("quantity", 0))})
+		else:
+			out.append({})
+	return out
+
+## 读档用：用存档数据覆盖背包（数量从 JSON 的 float 转回 int）
+func import_inventory(player_id: int, slots: Array) -> void:
+	var inv = get_inventory(player_id)
+	if not inv:
+		return
+	for i in range(inv.slots.size()):
+		if i < slots.size() and slots[i] is Dictionary and slots[i].has("item_id"):
+			inv.slots[i] = {"item_id": str(slots[i]["item_id"]), "quantity": int(slots[i].get("quantity", 0))}
+		else:
+			inv.slots[i] = {}
+
 func can_add_item(player_id: int, item_id: String, quantity: int) -> bool:
 	var inv = get_inventory(player_id)
 	if not inv:

@@ -146,10 +146,20 @@ var _content_loaded_chunks: Array[Vector2i] = []
 var _active_terrain_jobs: Dictionary = {}
 var _terrain_worker_context: Dictionary = {}
 var _chunk_queue_frame_skip: int = 0
+var _loaded_save: Dictionary = {}  # 读档数据（空 = 新游戏）
+var _world_seed_used: int = 0      # 本局实际使用的世界种子（存档用，靠它能复现同一世界）
 
 
 func _ready() -> void:
-	rng.randomize()  # 每次进入游戏随机生成不同的世界
+	# 决定本局世界种子：来自主菜单"继续游戏"且有存档则读档复现，否则随机生成新世界
+	if SaveManager.should_load_on_start and SaveManager.has_save():
+		_loaded_save = SaveManager.read_save()
+	SaveManager.should_load_on_start = false  # 用过即清，避免影响下次进入
+	if _loaded_save.is_empty():
+		rng.randomize()
+	else:
+		rng.seed = int(_loaded_save.get("world_seed", 0))
+	_world_seed_used = rng.seed
 	_create_world_layers()
 
 	# 配置群落（顺序必须匹配 BIOME_IDS）
@@ -221,8 +231,13 @@ func _ready() -> void:
 	resource_data = world_generator.resource_data
 
 	_create_player()
+	if not _loaded_save.is_empty():
+		var pp = _loaded_save.get("player_pos", {})
+		if pp is Dictionary and pp.has("x"):
+			player.position = Vector2(float(pp["x"]), float(pp["y"]))  # 读档时回到存档位置
 	_setup_camera()
 	_init_systems()
+	_apply_loaded_progress()  # 读档时恢复背包/时间/解锁站（须在系统创建后、HUD 之前）
 
 	# 初始只同步加载玩家周围的核心区块，避免点击"开始游戏"后长时间卡顿；
 	# 其余视野范围内的区块与所有内容（树木/花草）改为进入游戏后逐帧异步补齐。
@@ -251,12 +266,47 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_save_game()  # 退出游戏 / 返回菜单时自动存档
 	for key in _active_terrain_jobs.keys():
 		var job: Dictionary = _active_terrain_jobs[key]
 		var thread: Thread = job.get("thread", null)
 		if thread != null and thread.is_started():
 			thread.wait_to_finish()
 	_active_terrain_jobs.clear()
+
+
+# ========== 存档 / 读档 ==========
+
+## 收集当前进度写入存档（世界种子 + 玩家位置 + 背包 + 时间 + 解锁站）。
+## 注：建造物与已采集资源暂不持久化，读档后世界按种子刷新成原样。
+func _save_game() -> void:
+	if player == null or item_manager == null or time_system == null:
+		return
+	SaveManager.write_save({
+		"world_seed": _world_seed_used,
+		"player_pos": {"x": player.position.x, "y": player.position.y},
+		"inventory": item_manager.export_inventory(1),
+		"time": {"seconds": time_system.game_time_seconds, "day": time_system.day_number},
+		"stations": stations_unlocked.duplicate(),
+	})
+
+
+## 把读档数据应用到背包/时间/解锁站（须在子系统创建后、HUD 之前调用）。
+func _apply_loaded_progress() -> void:
+	if _loaded_save.is_empty():
+		return
+	var inv_slots = _loaded_save.get("inventory", [])
+	if inv_slots is Array:
+		item_manager.import_inventory(1, inv_slots)
+	var t = _loaded_save.get("time", {})
+	if t is Dictionary and t.has("seconds"):
+		time_system.game_time_seconds = float(t["seconds"])
+		time_system.day_number = int(t.get("day", 1))
+	var st = _loaded_save.get("stations", [])
+	if st is Array and not st.is_empty():
+		stations_unlocked.clear()
+		for s in st:
+			stations_unlocked.append(int(s))
 
 
 # ========== Chunk 管理 ==========
@@ -673,6 +723,12 @@ func _input(event: InputEvent) -> void:
 
 	# 初始地形预加载期间各控制器尚未创建，跳过依赖它们的输入，避免对 Nil 的空引用
 	if build_controller == null or hud_controller == null:
+		return
+
+	# F5 手动存档
+	if event is InputEventKey and event.pressed and not event.is_echo() and (event as InputEventKey).keycode == KEY_F5:
+		_save_game()
+		_spawn_floating_text(player.position, "已保存")
 		return
 
 	if event.is_action_pressed("ui_cancel"):

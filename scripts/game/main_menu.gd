@@ -16,9 +16,15 @@ func _ready() -> void:
 	continue_button.pressed.connect(_on_continue_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
-	continue_button.disabled = true
+	var sm = _save_manager()
+	continue_button.disabled = sm == null or not sm.has_save()  # 有存档才能"继续"
 	hint_label.text = ""
 	start_button.grab_focus()
+
+
+## 动态获取 SaveManager 单例（用路径访问而非全局符号，便于在无 autoload 的测试环境中加载本脚本）
+func _save_manager() -> Node:
+	return get_node_or_null("/root/SaveManager")
 
 
 func _apply_texture_button_states() -> void:
@@ -27,11 +33,19 @@ func _apply_texture_button_states() -> void:
 
 
 func _on_start_pressed() -> void:
+	var sm = _save_manager()
+	if sm:
+		sm.should_load_on_start = false  # 全新世界
 	get_tree().change_scene_to_file(GAME_SCENE_PATH)
 
 
 func _on_continue_pressed() -> void:
-	hint_label.text = "No saved game yet."
+	var sm = _save_manager()
+	if sm == null or not sm.has_save():
+		hint_label.text = "No saved game yet."
+		return
+	sm.should_load_on_start = true  # 通知游戏场景读档
+	get_tree().change_scene_to_file(GAME_SCENE_PATH)
 
 
 func _on_settings_pressed() -> void:

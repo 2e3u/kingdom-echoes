@@ -24,6 +24,7 @@ SharedConstants="*res://scripts/shared/constants.gd"
 SharedDataModels="*res://scripts/shared/data_models.gd"
 ItemDatabase="*res://scripts/shared/item_data.gd"
 RecipeDatabase="*res://scripts/shared/recipe_data.gd"
+SaveManager="*res://scripts/shared/save_manager.gd"
 
 [display]
 
