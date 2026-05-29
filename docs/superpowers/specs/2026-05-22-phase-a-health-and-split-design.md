@@ -19,10 +19,10 @@ scripts/game/
 
 ```
 kingdom_echoes.gd (主控)
-    ├── TextureGen          (纯静态，无依赖)
-    ├── HUDController       (读 player/item_manager/time_system 状态)
-    ├── HarvestController   (读 player/resource_sprites，写 item_manager)
-    └── BuildController     (读 player/item_manager，操作场景树)
+	├── TextureGen          (纯静态，无依赖)
+	├── HUDController       (读 player/item_manager/time_system 状态)
+	├── HarvestController   (读 player/resource_sprites，写 item_manager)
+	└── BuildController     (读 player/item_manager，操作场景树)
 ```
 
 所有 controller 由主控实例化并注入依赖，彼此之间无直接引用。

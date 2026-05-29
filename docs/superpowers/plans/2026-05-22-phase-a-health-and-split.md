@@ -741,10 +741,10 @@ Wire build_controller, remove extracted code.
 In kingdom_echoes.gd `_process`:
 ```gdscript
 if build_mode:
-    build_controller.update_preview()
+	build_controller.update_preview()
 hud_controller.update()
 if hud_controller.inventory_dirty:
-    hud_controller.refresh_slots()
+	hud_controller.refresh_slots()
 ```
 
 Mark dirty in harvest complete handler, craft complete handler, block place/remove.

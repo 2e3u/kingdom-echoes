@@ -13,7 +13,7 @@ config_version=5
 config/name="KingdomEchoes"
 config/description="王国残响 — 奇幻中世纪等距2.5D沙盒RPG · 权威服务端 + 多平台客户端"
 config/version="0.1.0"
-run/main_scene="res://scenes/kingdom_echoes.tscn"
+run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6")
 config/icon="res://icon.svg"
 

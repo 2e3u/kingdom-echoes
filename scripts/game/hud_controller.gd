@@ -88,29 +88,11 @@ func create() -> void:
 	hud.add_child(hotbar_panel)
 
 	for i in range(9):
-		var slot = Panel.new()
-		slot.position = Vector2(8 + i * 52, 5)
-		slot.size = Vector2(46, 42)
-		slot.modulate = Color(0.15, 0.15, 0.15, 0.9)
-		hotbar_panel.add_child(slot)
-		hotbar_slots.append(slot)
-
-		var lbl = Label.new()
-		lbl.position = Vector2(10 + i * 52, 5)
-		lbl.add_theme_font_size_override("font_size", 11)
-		lbl.add_theme_color_override("font_color", Color.WHITE)
-		lbl.size = Vector2(42, 40)
-		lbl.text = ""
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hotbar_panel.add_child(lbl)
-		hotbar_labels.append(lbl)
-
-		var icon = TextureRect.new()
-		icon.position = Vector2(10 + i * 52 + 3, 7)
-		icon.size = Vector2(16, 16)
-		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		hotbar_panel.add_child(icon)
-		hotbar_icons.append(icon)
+		var s = _make_slot(hotbar_panel, Vector2(8 + i * 52, 5), Vector2(46, 42),
+			Vector2(10 + i * 52, 5), Vector2(42, 40), Vector2(10 + i * 52 + 3, 7), true, false)
+		hotbar_slots.append(s["slot"])
+		hotbar_labels.append(s["label"])
+		hotbar_icons.append(s["icon"])
 
 	# 快捷栏选中高亮
 	update_hotbar_selection()
@@ -135,30 +117,11 @@ func create() -> void:
 	# 背包格子 5列x4行
 	for row in range(4):
 		for col in range(5):
-			var idx = row * 5 + col
-			var slot = Panel.new()
-			slot.position = Vector2(16 + col * 92, 44 + row * 74)
-			slot.size = Vector2(84, 68)
-			slot.modulate = Color(0.15, 0.15, 0.15, 0.9)
-			inv_panel.add_child(slot)
-			inv_grid.append(slot)
-
-			var lbl = Label.new()
-			lbl.position = Vector2(20 + col * 92, 46 + row * 74)
-			lbl.add_theme_font_size_override("font_size", 11)
-			lbl.add_theme_color_override("font_color", Color.WHITE)
-			lbl.size = Vector2(76, 64)
-			lbl.text = ""
-			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			inv_panel.add_child(lbl)
-			inv_grid_labels.append(lbl)
-
-			var icon = TextureRect.new()
-			icon.position = Vector2(20 + col * 92 + 4, 48 + row * 74 + 4)
-			icon.size = Vector2(16, 16)
-			icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-			inv_panel.add_child(icon)
-			inv_grid_icons.append(icon)
+			var s = _make_slot(inv_panel, Vector2(16 + col * 92, 44 + row * 74), Vector2(84, 68),
+				Vector2(20 + col * 92, 46 + row * 74), Vector2(76, 64), Vector2(20 + col * 92 + 4, 48 + row * 74 + 4), false, true)
+			inv_grid.append(s["slot"])
+			inv_grid_labels.append(s["label"])
+			inv_grid_icons.append(s["icon"])
 
 	# === 制造面板 (C键居中) ===
 	var cw = 420; var ch = 420
@@ -522,3 +485,37 @@ func get_station_changed_signal() -> Signal:
 
 func get_craft_signal() -> Signal:
 	return craft_requested
+
+
+# ========== 物品格子构建 ==========
+
+## 创建一个物品格子（背景面板 + 数量文字 + 图标），快捷栏和背包共用。
+## 返回 {"slot", "label", "icon"} 三个节点，供调用方存入各自的数组。
+func _make_slot(parent: Control, slot_pos: Vector2, slot_size: Vector2,
+		label_pos: Vector2, label_size: Vector2, icon_pos: Vector2,
+		label_centered: bool, label_autowrap: bool) -> Dictionary:
+	var slot = Panel.new()
+	slot.position = slot_pos
+	slot.size = slot_size
+	slot.modulate = Color(0.15, 0.15, 0.15, 0.9)
+	parent.add_child(slot)
+
+	var lbl = Label.new()
+	lbl.position = label_pos
+	lbl.size = label_size
+	lbl.text = ""
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_color_override("font_color", Color.WHITE)
+	if label_centered:
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if label_autowrap:
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(lbl)
+
+	var icon = TextureRect.new()
+	icon.position = icon_pos
+	icon.size = Vector2(16, 16)
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	parent.add_child(icon)
+
+	return {"slot": slot, "label": lbl, "icon": icon}
