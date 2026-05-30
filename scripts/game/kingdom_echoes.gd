@@ -85,6 +85,53 @@ const KNIGHT_SHEET_COLS := 8
 const KNIGHT_SHEET_ROWS := 4
 # 精灵表每行对应的行走方向，按 S/D/W/A 顺序（第1行=下, 第2行=右, 第3行=上, 第4行=左）
 const KNIGHT_ROW_ANIMS := ["walk_down", "walk_right", "walk_up", "walk_left"]
+# 丁达尔/阳光光束 shader：斜向光柱，从屏幕上方渐隐，叠加(add)出可见光束
+const GODRAY_SHADER := """
+shader_type canvas_item;
+render_mode blend_add;
+
+uniform vec4 ray_color : source_color = vec4(1.0, 0.95, 0.7, 1.0);
+uniform float intensity = 0.14;
+
+void fragment() {
+	vec2 uv = UV;
+	// 整片方向性光照(不是条纹光束)：光源一侧亮、对侧渐暗。
+	// light_dir 指向光源；右上=(0.7,-0.7)。改这两个数即可对齐阴影的倾斜角。
+	vec2 light_dir = vec2(-0.7, 0.7);
+	float grad = clamp(0.5 + dot(uv - vec2(0.5), light_dir) * 2.2, 0.0, 1.0);
+	grad = pow(grad, 1.4);
+	COLOR = vec4(ray_color.rgb, grad * intensity);
+}
+"""
+# 暗角 vignette：屏幕边缘压暗，营造聚焦/电影感氛围
+const VIGNETTE_SHADER := """
+shader_type canvas_item;
+render_mode blend_mul;
+
+uniform float strength = 0.4;
+
+void fragment() {
+	float d = distance(UV, vec2(0.5));
+	float vig = smoothstep(0.72, 0.32, d);
+	float k = mix(1.0 - strength, 1.0, vig);
+	COLOR = vec4(vec3(k), 1.0);
+}
+"""
+# 复古色彩分级：读取已渲染画面重新调色（降饱和 + 暖黄偏移 + 暗部褪色，胶片复古感）
+const COLORGRADE_SHADER := """
+shader_type canvas_item;
+
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+
+void fragment() {
+	vec3 c = texture(screen_tex, SCREEN_UV).rgb;
+	float gray = dot(c, vec3(0.299, 0.587, 0.114));
+	c = mix(vec3(gray), c, 0.7);          // 降饱和(复古褪色)
+	c *= vec3(1.07, 1.0, 0.85);           // 暖黄偏移
+	c = c * 0.88 + 0.06;                   // 提亮暗部(胶片褪色感)
+	COLOR = vec4(c, 1.0);
+}
+"""
 
 # ============ 可在 Inspector 实时调整的世界生成参数 ============
 # 打开 scenes/kingdom_echoes.tscn、选中根节点 OfflineGame，即可在右侧 Inspector 调这些值。
@@ -112,6 +159,18 @@ var terrain_root: Node2D = null
 var object_root: Node2D = null
 var ecology_debug_overlay: EcologyDebugOverlay = null
 var _canvas_modulate: CanvasModulate = null  # 昼夜假光影：给整个世界画面叠加色调(不影响 HUD)
+# 天气系统
+enum Weather {CLEAR, RAIN, SNOW}
+const WEATHER_CHANGE_INTERVAL := 75.0  # 真实秒，到点随机换天气
+var _weather: int = Weather.CLEAR
+var _weather_layer: CanvasLayer = null
+var _rain_particles: GPUParticles2D = null
+var _snow_particles: GPUParticles2D = null
+var _weather_timer: float = 0.0
+# 丁达尔光束
+var _godray_mat: ShaderMaterial = null
+var _godray_time: float = 0.0
+var _shadow_update_timer: float = 0.0  # 动态阴影低频更新计时
 
 # 资源节点（引用 WorldGenerator 内部字典）
 var resource_sprites: Dictionary = {}
@@ -190,11 +249,11 @@ func _ready() -> void:
 	var resource_defs: Array[Dictionary] = [
 		{"id": "tree_round", "item": "wood", "qty": 3, "name": "阔叶树",
 		 "harvest_type": SharedEnums.HarvestType.WOOD, "tool_tier": SharedEnums.ToolTier.NONE,
-		 "biomes": TREE_BIOME_IDS, "density": 0.001, "z_index": 2, "scale": 0.36, "spacing_scale": tree_spacing_scale, "textures": _load_round_tree_textures(), "anchor": "bottom", "collision_radius": 12.0, "collision_offset": Vector2(0, -9),
+		 "biomes": TREE_BIOME_IDS, "density": 0.001, "z_index": 2, "scale": 0.36, "spacing_scale": tree_spacing_scale, "textures": _load_round_tree_textures(), "anchor": "bottom", "shadow": true, "collision_radius": 12.0, "collision_offset": Vector2(0, -9),
 		 "placement_mode": "poisson_grid", "grid_cell_size": 150, "grid_density": 0.54, "candidate_multiplier": 14, "min_distance_factor": 0.74, "water_clearance": 3, "water_falloff": 6, "block_on_water": true, "cluster_group": "round_forest", "region_noise": {"group": "round_forest", "frequency": 0.014, "threshold": 0.50, "softness": 0.16, "min_multiplier": 0.05, "power": 1.45, "octaves": 4, "gain": 0.56}, "ecology": {"temperature": {"target": broadleaf_temperature, "tolerance": mixed_zone_width, "gate": true}, "moisture": {"target": 0.62, "tolerance": 0.34}, "soil_depth": {"target": 0.72, "tolerance": 0.34}, "elevation": {"target": 0.38, "tolerance": 0.34, "gate": true}, "min_multiplier": 0.04}},
 		{"id": "tree_conifer", "item": "wood", "qty": 3, "name": "针叶树",
 		 "harvest_type": SharedEnums.HarvestType.WOOD, "tool_tier": SharedEnums.ToolTier.NONE,
-		 "biomes": TREE_BIOME_IDS, "density": 0.001, "z_index": 2, "scale": 0.40, "spacing_scale": tree_spacing_scale, "textures": _load_conifer_tree_textures(), "anchor": "bottom", "collision_radius": 11.0, "collision_offset": Vector2(0, -9),
+		 "biomes": TREE_BIOME_IDS, "density": 0.001, "z_index": 2, "scale": 0.40, "spacing_scale": tree_spacing_scale, "textures": _load_conifer_tree_textures(), "anchor": "bottom", "shadow": true, "collision_radius": 11.0, "collision_offset": Vector2(0, -9),
 		 "placement_mode": "poisson_grid", "grid_cell_size": 142, "grid_density": 0.50, "candidate_multiplier": 14, "min_distance_factor": 0.78, "water_clearance": 3, "water_falloff": 6, "block_on_water": true, "cluster_group": "conifer_forest", "region_noise": {"group": "conifer_forest", "frequency": 0.014, "threshold": 0.50, "softness": 0.16, "min_multiplier": 0.05, "power": 1.45, "octaves": 4, "gain": 0.56}, "ecology": {"temperature": {"target": conifer_temperature, "tolerance": mixed_zone_width, "gate": true}, "moisture": {"target": 0.55, "tolerance": 0.36}, "soil_depth": {"target": 0.50, "tolerance": 0.38}, "elevation": {"target": conifer_tree_line, "tolerance": 0.40, "gate": true}, "min_multiplier": 0.04}},
 		{"id": "copper_ore", "item": "copper_ore", "qty": 2, "name": "铜矿",
 		 "harvest_type": SharedEnums.HarvestType.ORE, "tool_tier": SharedEnums.ToolTier.WOOD,
@@ -254,6 +313,7 @@ func _ready() -> void:
 	# HUD
 	var hud = CanvasLayer.new()
 	hud.name = "HUD"
+	hud.layer = 100  # HUD 置于所有大气特效(光束/暗角/天气/调色)之上
 	add_child(hud)
 
 	hud_controller = HUDController.new()
@@ -267,6 +327,10 @@ func _ready() -> void:
 	build_controller = BuildController.new()
 	build_controller.setup(player, item_manager, hud_controller, object_root, stations_unlocked, _spawn_floating_text,
 		{"TILE_SIZE": TILE_SIZE, "WORLD_TILES_X": 99999, "WORLD_TILES_Y": 99999})
+
+	_create_weather()
+	_create_godrays()
+	_create_atmosphere_particles()
 
 	print("[Offline] 无限世界已启动 — WASD移动 J采集 B背包 C制造 V建造")
 
@@ -628,6 +692,7 @@ func _create_player() -> void:
 	player_sprite = player.get_node("Sprite")
 	player_sprite.sprite_frames = _build_knight_frames()
 	player_sprite.play("idle")
+	_attach_ground_shadow(player, Vector2(0.6, 0.32), Vector2(6, 40))  # 脚下接地椭圆阴影(偏右=日光从左上)
 	object_root.add_child(player)
 
 
@@ -700,8 +765,260 @@ func _update_day_night_lighting(delta: float) -> void:
 	# 把光照(0.05~1.0)映射到可见亮度(0.4~1.0)，保证夜晚也看得清
 	var vis = lerpf(0.4, 1.0, clampf(light, 0.0, 1.0))
 	var target = Color(tint.r * vis, tint.g * vis, tint.b * vis, 1.0)
-	# 平滑过渡，避免时段切换时画面突变
+	# 天气调制：雨天压暗偏灰，雪天偏亮偏冷
+	if _weather == Weather.RAIN:
+		var g = (target.r + target.g + target.b) / 3.0
+		target = target.lerp(Color(g, g, g * 1.05, 1.0), 0.4).darkened(0.18)
+	elif _weather == Weather.SNOW:
+		target = target.lerp(Color(0.85, 0.9, 1.0, 1.0), 0.22).lightened(0.05)
+	# 平滑过渡，避免时段/天气切换时画面突变
 	_canvas_modulate.color = _canvas_modulate.color.lerp(target, clampf(delta * 0.8, 0.0, 1.0))
+
+
+
+## 创建丁达尔/阳光光束 overlay（屏幕空间的斜向光柱，叠加在世界画面上）。
+func _create_godrays() -> void:
+	var layer = CanvasLayer.new()
+	layer.name = "GodRays"
+	layer.layer = 3  # 世界之上、天气(5)与 HUD 之下
+	add_child(layer)
+	var rect = ColorRect.new()
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var shader = Shader.new()
+	shader.code = GODRAY_SHADER
+	_godray_mat = ShaderMaterial.new()
+	_godray_mat.shader = shader
+	rect.material = _godray_mat
+	layer.add_child(rect)
+
+	# 暗角 vignette：单独一层(正片叠底压暗边缘)
+	var vig_layer = CanvasLayer.new()
+	vig_layer.name = "Vignette"
+	vig_layer.layer = 4  # 光束之上、天气/HUD 之下
+	add_child(vig_layer)
+	var vig_rect = ColorRect.new()
+	vig_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vig_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vig_shader = Shader.new()
+	vig_shader.code = VIGNETTE_SHADER
+	var vig_mat = ShaderMaterial.new()
+	vig_mat.shader = vig_shader
+	vig_rect.material = vig_mat
+	vig_layer.add_child(vig_rect)
+
+	# 复古色彩分级：读取下层已渲染画面整体调色（在 HUD 之下，不影响 UI）
+	var grade_layer = CanvasLayer.new()
+	grade_layer.name = "ColorGrade"
+	grade_layer.layer = 6
+	add_child(grade_layer)
+	var grade_rect = ColorRect.new()
+	grade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var grade_shader = Shader.new()
+	grade_shader.code = COLORGRADE_SHADER
+	var grade_mat = ShaderMaterial.new()
+	grade_mat.shader = grade_shader
+	grade_rect.material = grade_mat
+	grade_layer.add_child(grade_rect)
+
+
+## 创建空气中缓缓飘浮的微尘/光点，营造空气感与氛围。
+func _create_atmosphere_particles() -> void:
+	var layer = CanvasLayer.new()
+	layer.name = "AtmosphereDust"
+	layer.layer = 2  # 世界之上、色彩分级之下（微尘也一起被调色）
+	add_child(layer)
+	var vp = get_viewport_rect().size
+	var p = GPUParticles2D.new()
+	p.amount = 70
+	p.lifetime = 12.0
+	p.preprocess = 12.0
+	p.local_coords = false
+	p.position = Vector2(vp.x / 2.0, vp.y / 2.0)
+	p.modulate = Color(1.0, 0.98, 0.85, 0.22)
+	p.texture = _make_light_texture(8)  # 小柔光点
+	var mat = ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	mat.emission_box_extents = Vector3(vp.x / 2.0 + 100.0, vp.y / 2.0 + 100.0, 1.0)
+	mat.gravity = Vector3(0.0, 4.0, 0.0)        # 极缓下沉
+	mat.direction = Vector3(0.4, 0.2, 0.0)
+	mat.spread = 180.0
+	mat.initial_velocity_min = 3.0
+	mat.initial_velocity_max = 12.0
+	mat.scale_min = 0.3
+	mat.scale_max = 0.9
+	p.process_material = mat
+	layer.add_child(p)
+
+
+## 根据时段调整光束颜色与强度：白天暖黄、黄昏橙、夜晚月光蓝、并随光照强弱。
+func _update_godrays() -> void:
+	if _godray_mat == null or time_system == null:
+		return
+	var light = time_system.get_light_multiplier()
+	var hour = time_system.get_game_hour()
+	var col = Color(1.0, 0.93, 0.65)  # 白天：暖黄阳光
+	var inten = 0.08                  # 弱化为氛围，主角是动态阴影
+	if hour >= 17.0 and hour < 20.0:
+		col = Color(1.0, 0.6, 0.3); inten = 0.11    # 黄昏：橙
+	elif hour >= 20.0 or hour < 5.0:
+		col = Color(0.55, 0.68, 1.0); inten = 0.05  # 夜晚：月光蓝
+	elif hour >= 5.0 and hour < 7.0:
+		col = Color(1.0, 0.82, 0.55); inten = 0.07  # 黎明：微暖
+	inten *= clampf(light + 0.15, 0.25, 1.0)        # 越暗光束越弱
+	_godray_mat.set_shader_parameter("ray_color", col)
+	_godray_mat.set_shader_parameter("intensity", inten)
+
+
+## 根据当前时刻计算太阳投下的阴影参数：
+## 清晨太阳低→长影朝左；正午太阳高→短影；黄昏太阳低→长影朝右；夜晚淡影。
+func _sun_shadow_params() -> Dictionary:
+	var hour = time_system.get_game_hour() if time_system else 12.0
+	var t = clampf((hour - 6.0) / 12.0, 0.0, 1.0)   # 0=日出(6点) 1=日落(18点)
+	var skew = lerpf(-0.95, 0.95, t)                # 早:影朝左(-)  晚:影朝右(+)
+	var noon = absf(t - 0.5) * 2.0                  # 0=正午 1=清晨/黄昏
+	var length = lerpf(0.30, 0.9, noon)            # 正午短、早晚拉长
+	var alpha = 0.28
+	if hour < 5.5 or hour >= 19.0:                  # 夜晚：月光下淡影
+		alpha = 0.10
+	return {"skew": skew, "length": length, "alpha": alpha}
+
+
+## 把太阳阴影参数应用到所有树阴影与玩家阴影。
+func _update_dynamic_shadows() -> void:
+	if world_generator == null:
+		return
+	var p = _sun_shadow_params()
+	world_generator.update_cast_shadows(p["skew"], p["length"], p["alpha"])
+	# 玩家接地椭圆阴影：随太阳横向偏移 + 随长度拉伸
+	if player and is_instance_valid(player):
+		var sh = player.get_node_or_null("Shadow")
+		if sh:
+			sh.position = Vector2(p["skew"] * 24.0, 40.0)
+			sh.scale = Vector2(0.55 + p["length"] * 0.35, 0.3)
+			sh.modulate.a = p["alpha"] + 0.08
+
+
+## 生成径向渐变光照纹理（中心亮、边缘渐隐），用于柔和椭圆阴影与点光源（火光等）。
+func _make_light_texture(size: int) -> Texture2D:
+	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var c = (size - 1) / 2.0
+	for y in range(size):
+		for x in range(size):
+			var d = Vector2(x - c, y - c).length() / c
+			var a = clampf(1.0 - d, 0.0, 1.0)
+			a = a * a  # 平滑衰减
+			img.set_pixel(x, y, Color(1, 1, 1, a))
+	return ImageTexture.create_from_image(img)
+
+
+## 给一个节点加柔和的接地椭圆阴影（用径向渐变压扁成椭圆），营造立体接地感。
+func _attach_ground_shadow(host: Node2D, ellipse_scale: Vector2, offset: Vector2) -> void:
+	var shadow = Sprite2D.new()
+	shadow.name = "Shadow"
+	shadow.texture = _make_light_texture(64)
+	shadow.modulate = Color(0, 0, 0, 0.35)
+	shadow.scale = ellipse_scale
+	shadow.position = offset
+	shadow.z_index = -1
+	host.add_child(shadow)
+	host.move_child(shadow, 0)
+
+
+# ========== 天气系统 ==========
+
+func _create_weather() -> void:
+	_weather_layer = CanvasLayer.new()
+	_weather_layer.name = "WeatherLayer"
+	_weather_layer.layer = 5  # 世界之上、HUD(更高层)之下
+	add_child(_weather_layer)
+	var vp = get_viewport_rect().size
+	_rain_particles = _make_weather_particles(true, vp)
+	_weather_layer.add_child(_rain_particles)
+	_snow_particles = _make_weather_particles(false, vp)
+	_weather_layer.add_child(_snow_particles)
+	_set_weather(Weather.CLEAR)
+
+
+func _make_weather_particles(is_rain: bool, vp: Vector2) -> GPUParticles2D:
+	var p = GPUParticles2D.new()
+	p.position = Vector2(vp.x / 2.0, -40.0)
+	p.emitting = false
+	p.local_coords = false
+	p.texture = _make_rain_texture() if is_rain else _make_snow_texture()
+	var mat = ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	mat.emission_box_extents = Vector3(vp.x / 2.0 + 250.0, 4.0, 1.0)
+	mat.gravity = Vector3.ZERO
+	if is_rain:
+		p.amount = 280
+		p.lifetime = 0.7
+		mat.direction = Vector3(0.18, 1.0, 0.0)
+		mat.spread = 3.0
+		mat.initial_velocity_min = 1150.0
+		mat.initial_velocity_max = 1350.0
+	else:
+		p.amount = 170
+		p.lifetime = 3.8
+		mat.direction = Vector3(0.12, 1.0, 0.0)
+		mat.spread = 14.0
+		mat.initial_velocity_min = 80.0
+		mat.initial_velocity_max = 150.0
+		mat.angular_velocity_min = -45.0
+		mat.angular_velocity_max = 45.0
+		mat.linear_accel_min = -10.0
+		mat.linear_accel_max = 10.0
+	p.process_material = mat
+	p.preprocess = p.lifetime  # 启用时立刻铺满屏幕，而非从空白渐入
+	return p
+
+
+func _make_rain_texture() -> Texture2D:
+	var img = Image.create(2, 16, false, Image.FORMAT_RGBA8)
+	for y in range(16):
+		var a = 0.25 + 0.45 * (1.0 - absf(y - 8.0) / 8.0)
+		img.set_pixel(0, y, Color(0.72, 0.8, 1.0, a))
+		img.set_pixel(1, y, Color(0.72, 0.8, 1.0, a))
+	return ImageTexture.create_from_image(img)
+
+
+func _make_snow_texture() -> Texture2D:
+	var s = 6
+	var img = Image.create(s, s, false, Image.FORMAT_RGBA8)
+	var c = (s - 1) / 2.0
+	for y in range(s):
+		for x in range(s):
+			var d = Vector2(x - c, y - c).length()
+			var a = clampf(1.0 - d / (c + 0.5), 0.0, 1.0)
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+	return ImageTexture.create_from_image(img)
+
+
+func _set_weather(w: int) -> void:
+	_weather = w
+	if _rain_particles:
+		_rain_particles.emitting = (w == Weather.RAIN)
+	if _snow_particles:
+		_snow_particles.emitting = (w == Weather.SNOW)
+	var names = {Weather.CLEAR: "晴", Weather.RAIN: "雨", Weather.SNOW: "雪"}
+	if player and is_instance_valid(player):
+		_spawn_floating_text(player.position, "天气：%s" % names.get(w, "?"))
+
+
+func _random_weather() -> int:
+	# 晴的概率高一些，雨/雪各占一部分
+	var r = randf()
+	if r < 0.55:
+		return Weather.CLEAR
+	elif r < 0.8:
+		return Weather.RAIN
+	return Weather.SNOW
+
+
+func _cycle_weather() -> void:
+	_set_weather((_weather + 1) % 3)
+	_weather_timer = 0.0
 
 
 func _setup_camera() -> void:
@@ -769,6 +1086,21 @@ func _process(delta: float) -> void:
 
 	_update_day_night_lighting(delta)
 
+	_godray_time += delta
+	_update_godrays()
+
+	# 动态阴影：低频更新(阴影变化很慢，没必要每帧)
+	_shadow_update_timer += delta
+	if _shadow_update_timer >= 0.25:
+		_shadow_update_timer = 0.0
+		_update_dynamic_shadows()
+
+	# 天气：到点随机切换
+	_weather_timer += delta
+	if _weather_timer >= WEATHER_CHANGE_INTERVAL:
+		_weather_timer = 0.0
+		_set_weather(_random_weather())
+
 	# 采集
 	if not build_controller.build_mode and not hud_controller.inventory_open and not hud_controller.craft_open:
 		if Input.is_action_just_pressed("build_place"):
@@ -818,6 +1150,17 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.is_echo() and (event as InputEventKey).keycode == KEY_F5:
 		_save_game()
 		_spawn_floating_text(player.position, "已保存")
+		return
+
+	# K 键手动循环切换天气（晴→雨→雪）
+	if event is InputEventKey and event.pressed and not event.is_echo() and (event as InputEventKey).keycode == KEY_K:
+		_cycle_weather()
+		return
+
+	# T 键快进 2 小时（调试用，方便看昼夜光影）
+	if event is InputEventKey and event.pressed and not event.is_echo() and (event as InputEventKey).keycode == KEY_T:
+		if time_system:
+			time_system.game_time_seconds = fmod(time_system.game_time_seconds + 7200.0, 86400.0)
 		return
 
 	if event.is_action_pressed("ui_cancel"):

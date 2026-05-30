@@ -1203,6 +1203,8 @@ func _spawn_resource_sprite(id: String, definition: Dictionary, texture: Texture
 	var s = definition.get("scale", 1.0)
 	sprite.scale = Vector2(s, s)
 	_apply_resource_anchor(sprite, definition)
+	if definition.get("shadow", false):
+		_attach_cast_shadow(sprite)
 	_add_resource_collision(sprite, definition)
 	_object_node.add_child(sprite)
 
@@ -1453,6 +1455,38 @@ func _apply_resource_anchor(sprite: Sprite2D, definition: Dictionary) -> void:
 		return
 	var size = sprite.texture.get_size()
 	sprite.offset = Vector2(-size.x / 2.0, -size.y)
+
+
+## 给 bottom 锚点的物体(如树)加剪影斜投影子：从脚底向屏幕下方铺、向右倾斜，
+## 模拟日光从左上方照下来。参数可按需微调(透明度/倾斜/压扁)。
+func _attach_cast_shadow(host: Sprite2D) -> void:
+	if host.texture == null:
+		return
+	var shadow = Sprite2D.new()
+	shadow.name = "CastShadow"
+	shadow.texture = host.texture
+	shadow.centered = host.centered
+	shadow.offset = host.offset
+	shadow.modulate = Color(0, 0, 0, 0.26)
+	shadow.z_index = -1
+	shadow.scale = Vector2(1.0, -0.55)  # 初始值；运行时由太阳角度动态更新
+	shadow.skew = 0.6
+	host.add_child(shadow)
+	host.move_child(shadow, 0)
+
+
+## 按太阳角度批量更新所有投影阴影的倾斜(skew)、长度(length)与浓淡(alpha)。
+## 由 OfflineGame 每隔一小段时间调用，实现日出→正午→日落的阴影流动。
+func update_cast_shadows(skew: float, length: float, alpha: float) -> void:
+	for id in resource_sprites:
+		var host = resource_sprites[id]
+		if not is_instance_valid(host):
+			continue
+		var sh = host.get_node_or_null("CastShadow")
+		if sh:
+			sh.skew = skew
+			sh.scale = Vector2(1.0, -length)
+			sh.modulate.a = alpha
 
 
 func _add_resource_collision(sprite: Sprite2D, definition: Dictionary) -> void:
