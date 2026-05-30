@@ -171,6 +171,8 @@ var _weather_timer: float = 0.0
 var _godray_mat: ShaderMaterial = null
 var _godray_time: float = 0.0
 var _shadow_update_timer: float = 0.0  # 动态阴影低频更新计时
+var _minimap_timer: float = 0.0
+const MINIMAP_SAMPLES := 56  # 小地图采样格数(覆盖玩家周围 56×56 格)
 
 # 资源节点（引用 WorldGenerator 内部字典）
 var resource_sprites: Dictionary = {}
@@ -871,6 +873,40 @@ func _update_godrays() -> void:
 	_godray_mat.set_shader_parameter("intensity", inten)
 
 
+## 刷新左上角小地图：采样玩家周围地形绘成缩略图，中心标记玩家。
+func _update_minimap() -> void:
+	if hud_controller == null or hud_controller.minimap_rect == null:
+		return
+	if player == null or world_generator == null:
+		return
+	var n = MINIMAP_SAMPLES
+	var img = Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var pc = WorldGenerator.world_position_to_cell(player.position, TILE_SIZE)
+	var half = int(n / 2)
+	for y in range(n):
+		for x in range(n):
+			var b = world_generator.get_biome_at(pc.x + x - half, pc.y + y - half)
+			img.set_pixel(x, y, _biome_minimap_color(b))
+	# 玩家中心红点
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			img.set_pixel(half + dx, half + dy, Color(1.0, 0.25, 0.25))
+	hud_controller.minimap_rect.texture = ImageTexture.create_from_image(img)
+
+
+func _biome_minimap_color(b: int) -> Color:
+	match b:
+		WorldGenerator.BIOME_GRASS: return Color(0.42, 0.55, 0.32)
+		WorldGenerator.BIOME_FOREST: return Color(0.24, 0.40, 0.22)
+		WorldGenerator.BIOME_DIRT: return Color(0.46, 0.33, 0.22)
+		WorldGenerator.BIOME_SAND: return Color(0.78, 0.72, 0.48)
+		WorldGenerator.BIOME_SNOW: return Color(0.85, 0.88, 0.92)
+		WorldGenerator.BIOME_SWAMP: return Color(0.30, 0.37, 0.27)
+		WorldGenerator.BIOME_STONE: return Color(0.50, 0.50, 0.52)
+		WorldGenerator.BIOME_WATER: return Color(0.26, 0.44, 0.62)
+		_: return Color(0.3, 0.3, 0.3)
+
+
 ## 根据当前时刻计算太阳投下的阴影参数：
 ## 清晨太阳低→长影朝左；正午太阳高→短影；黄昏太阳低→长影朝右；夜晚淡影。
 func _sun_shadow_params() -> Dictionary:
@@ -1095,6 +1131,12 @@ func _process(delta: float) -> void:
 		_shadow_update_timer = 0.0
 		_update_dynamic_shadows()
 
+	# 小地图：低频刷新
+	_minimap_timer += delta
+	if _minimap_timer >= 0.4:
+		_minimap_timer = 0.0
+		_update_minimap()
+
 	# 天气：到点随机切换
 	_weather_timer += delta
 	if _weather_timer >= WEATHER_CHANGE_INTERVAL:
@@ -1213,10 +1255,10 @@ func _input(event: InputEvent) -> void:
 	if not build_controller.build_mode and not hud_controller.inventory_open and not hud_controller.craft_open and event is InputEventMouseButton:
 		var mb = event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-			hud_controller.hotbar_selected = (hud_controller.hotbar_selected - 1) % 9
+			hud_controller.hotbar_selected = (hud_controller.hotbar_selected - 1) % 10
 			hud_controller.update_hotbar_selection()
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			hud_controller.hotbar_selected = (hud_controller.hotbar_selected + 1) % 9
+			hud_controller.hotbar_selected = (hud_controller.hotbar_selected + 1) % 10
 			hud_controller.update_hotbar_selection()
 
 

@@ -30,6 +30,8 @@ func _save_manager() -> Node:
 func _apply_texture_button_states() -> void:
 	for button in [start_button, continue_button, settings_button, quit_button]:
 		button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		# 去掉获得键盘焦点时的默认白色边框（保留焦点/回车选中功能，只是不画框）
+		button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 
 func _on_start_pressed() -> void:
