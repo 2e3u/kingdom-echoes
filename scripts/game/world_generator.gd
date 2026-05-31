@@ -410,6 +410,25 @@ func _find_resource_region_noise(group: String) -> Dictionary:
 	return {}
 
 
+## 一次性返回某格的 {biome, tree} 概览(供小地图/大地图用)。
+## 合并 biome 与树覆盖计算，生态层只采样一次(原 get_biome_at + get_tree_cover_at 要采两次)，约省一半。
+func get_terrain_overview(gx: int, gy: int) -> Dictionary:
+	var ecology = _sample_ecology_layers(gx, gy)
+	var biome_eco = ecology.duplicate()
+	biome_eco["temperature"] = clampf(float(ecology["temperature"]) + _lat_bias(gy), 0.0, 1.0)
+	var biome = _select_biome_for_ecology(biome_eco, gx, gy)
+	var tree = 0.0
+	if biome == BIOME_GRASS or biome == BIOME_FOREST or biome == BIOME_DIRT or biome == BIOME_SWAMP:
+		for d in _resource_defs:
+			var grp = str(d.get("cluster_group", ""))
+			if grp != "round_forest" and grp != "conifer_forest":
+				continue
+			var region = _get_region_spawn_multiplier(d, gx, gy, "res")
+			var eco = _get_ecology_spawn_multiplier(d, ecology)
+			tree = maxf(tree, region * eco)
+	return {"biome": biome, "tree": clampf(tree, 0.0, 1.0)}
+
+
 static func world_position_to_cell(pos: Vector2, tile_size: int) -> Vector2i:
 	return Vector2i(floori(pos.x / tile_size), floori(pos.y / tile_size))
 

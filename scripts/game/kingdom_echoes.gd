@@ -154,6 +154,17 @@ void fragment() {
 var player: CharacterBody2D = null
 var player_sprite: AnimatedSprite2D = null
 var camera: Camera2D = null
+# 大地图(M键)分帧生成状态
+var _map_gen_active := false
+var _map_gen_row := 0
+var _map_gen_img: Image
+var _map_gen_pc: Vector2i
+# 小地图分帧生成状态(移动才重算 + 分帧摊开)
+var _mm_gen_active := false
+var _mm_gen_row := 0
+var _mm_gen_img: Image
+var _mm_gen_pc: Vector2i
+var _mm_last_pc := Vector2i(2147483647, 2147483647)
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var terrain_root: Node2D = null
 var object_root: Node2D = null
@@ -174,6 +185,8 @@ var _shadow_update_timer: float = 0.0  # 动态阴影低频更新计时
 var _minimap_timer: float = 0.0
 const MINIMAP_SAMPLES := 120  # 小地图分辨率(采样点数) = 覆盖格数(STEP=1时)
 const MINIMAP_STEP := 1       # 每点跨1格 → 覆盖120格，≈屏幕可见(86×48)略大，所见即所得
+const LARGE_MAP_SAMPLES := 160  # 大地图(M键)分辨率
+const LARGE_MAP_STEP := 8       # 每点跨8格 → 覆盖1280格，全局概览
 
 # 资源节点（引用 WorldGenerator 内部字典）
 var resource_sprites: Dictionary = {}
@@ -875,32 +888,86 @@ func _update_godrays() -> void:
 
 
 ## 刷新左上角小地图：采样玩家周围地形绘成缩略图，中心标记玩家。
+## 小地图刷新：玩家未移动出格则跳过(静止零开销)，移动则发起一次分帧生成。
 func _update_minimap() -> void:
 	if hud_controller == null or hud_controller.minimap_rect == null:
 		return
 	if player == null or world_generator == null:
 		return
-	var n = MINIMAP_SAMPLES
-	var img = Image.create(n, n, false, Image.FORMAT_RGBA8)
 	var pc = WorldGenerator.world_position_to_cell(player.position, TILE_SIZE)
+	if not _mm_gen_active and pc == _mm_last_pc:
+		return
+	_mm_last_pc = pc
+	_mm_gen_pc = pc
+	_mm_gen_img = Image.create(MINIMAP_SAMPLES, MINIMAP_SAMPLES, false, Image.FORMAT_RGBA8)
+	_mm_gen_row = 0
+	_mm_gen_active = true
+
+
+## 小地图分帧生成：每帧若干行，移动时摊开避免卡顿，完成时一次性贴图。
+func _step_minimap_generation() -> void:
+	if not _mm_gen_active or _mm_gen_img == null:
+		return
+	var n = MINIMAP_SAMPLES
 	var half = int(n / 2)
-	for y in range(n):
+	var end_row = mini(_mm_gen_row + 12, n)
+	for y in range(_mm_gen_row, end_row):
 		for x in range(n):
-			var gx = pc.x + (x - half) * MINIMAP_STEP
-			var gy = pc.y + (y - half) * MINIMAP_STEP
-			var b = world_generator.get_biome_at(gx, gy)
-			var col = _biome_minimap_color(b)
-			# 树是独立的密度层(不是 biome)：陆地上树多的地方在小地图按密度混成森林绿，与实际地表对应
-			if b == WorldGenerator.BIOME_GRASS or b == WorldGenerator.BIOME_FOREST or b == WorldGenerator.BIOME_DIRT or b == WorldGenerator.BIOME_SWAMP:
-				var td = world_generator.get_tree_cover_at(gx, gy)
-				if td > 0.1:
-					col = col.lerp(Color(0.16, 0.33, 0.15), clampf(td, 0.0, 0.9))
-			img.set_pixel(x, y, col)
-	# 玩家中心红点
-	for dy in range(-1, 2):
-		for dx in range(-1, 2):
-			img.set_pixel(half + dx, half + dy, Color(1.0, 0.25, 0.25))
-	hud_controller.minimap_rect.texture = ImageTexture.create_from_image(img)
+			_mm_gen_img.set_pixel(x, y, _terrain_pixel_color(_mm_gen_pc.x + (x - half) * MINIMAP_STEP, _mm_gen_pc.y + (y - half) * MINIMAP_STEP))
+	_mm_gen_row = end_row
+	if _mm_gen_row >= n:
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				_mm_gen_img.set_pixel(half + dx, half + dy, Color(1.0, 0.25, 0.25))
+		_mm_gen_active = false
+		if hud_controller and hud_controller.minimap_rect:
+			hud_controller.minimap_rect.texture = ImageTexture.create_from_image(_mm_gen_img)
+
+
+## 单格地形颜色：biome 底色 + 实际树覆盖度(get_tree_cover_at)叠加森林绿。
+## 小地图与大地图共用，保证与实际地图一致。
+func _terrain_pixel_color(gx: int, gy: int) -> Color:
+	var ov = world_generator.get_terrain_overview(gx, gy)
+	var col = _biome_minimap_color(int(ov["biome"]))
+	var td = float(ov["tree"])
+	if td > 0.1:
+		col = col.lerp(Color(0.16, 0.33, 0.15), clampf(td, 0.0, 0.9))
+	return col
+
+
+## 大地图(M键)：大范围地形概览。分帧生成(树覆盖计算重)，避免打开瞬间卡顿。
+func _update_large_map() -> void:
+	if hud_controller == null or hud_controller.map_rect == null:
+		return
+	if player == null or world_generator == null:
+		return
+	_map_gen_pc = WorldGenerator.world_position_to_cell(player.position, TILE_SIZE)
+	_map_gen_img = Image.create(LARGE_MAP_SAMPLES, LARGE_MAP_SAMPLES, false, Image.FORMAT_RGBA8)
+	_map_gen_row = 0
+	_map_gen_active = true
+
+
+## 每帧生成大地图的若干行(约 14 帧完成)，逐行显现，单帧不阻塞。
+func _step_large_map_generation() -> void:
+	if not _map_gen_active or _map_gen_img == null:
+		return
+	var n = LARGE_MAP_SAMPLES
+	var half = int(n / 2)
+	var end_row = mini(_map_gen_row + 12, n)
+	for y in range(_map_gen_row, end_row):
+		for x in range(n):
+			_map_gen_img.set_pixel(x, y, _terrain_pixel_color(_map_gen_pc.x + (x - half) * LARGE_MAP_STEP, _map_gen_pc.y + (y - half) * LARGE_MAP_STEP))
+	_map_gen_row = end_row
+	if _map_gen_row >= n:
+		for dy in range(-2, 3):
+			for dx in range(-2, 3):
+				var px = half + dx
+				var py = half + dy
+				if px >= 0 and px < n and py >= 0 and py < n:
+					_map_gen_img.set_pixel(px, py, Color(1.0, 0.25, 0.25))
+		_map_gen_active = false
+	if hud_controller and hud_controller.map_rect:
+		hud_controller.map_rect.texture = ImageTexture.create_from_image(_map_gen_img)
 
 
 func _biome_minimap_color(b: int) -> Color:
@@ -1181,6 +1248,10 @@ func _process(delta: float) -> void:
 	hud_controller.update(build_controller.build_mode)
 	if hud_controller.inventory_dirty:
 		hud_controller.refresh_slots()
+	if _map_gen_active:
+		_step_large_map_generation()
+	if _mm_gen_active:
+		_step_minimap_generation()
 
 
 func _on_harvest_completed(item_id: String, qty: int) -> void:
@@ -1213,6 +1284,23 @@ func _input(event: InputEvent) -> void:
 		if time_system:
 			time_system.game_time_seconds = fmod(time_system.game_time_seconds + 7200.0, 86400.0)
 		return
+
+	# M 键打开/关闭大地图
+	if event is InputEventKey and event.pressed and not event.is_echo() and (event as InputEventKey).keycode == KEY_M:
+		hud_controller.toggle_map()
+		if hud_controller.map_open:
+			_update_large_map()
+		return
+
+	# 点击小地图也呼出大地图
+	if event is InputEventMouseButton and event.pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		var mm = hud_controller.minimap_panel
+		if mm and Rect2(mm.position, mm.size).has_point((event as InputEventMouseButton).position):
+			hud_controller.toggle_map()
+			if hud_controller.map_open:
+				_update_large_map()
+			get_viewport().set_input_as_handled()
+			return
 
 	if event.is_action_pressed("ui_cancel"):
 		hud_controller.close_all()

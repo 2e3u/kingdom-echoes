@@ -40,6 +40,10 @@ var craft_buttons: Array[Button] = []
 var craft_title_label: Label
 var corner_tl: Label
 var minimap_panel: Panel
+var map_open := false
+var map_panel: Panel
+var map_rect: TextureRect
+var map_title: Label
 var minimap_rect: TextureRect
 var corner_tr: Label
 var hint_label: Label
@@ -227,6 +231,57 @@ func create() -> void:
 		inv_itembar.append(c["slot"]); inv_itembar_labels.append(c["label"]); inv_itembar_icons.append(c["icon"])
 		c["slot"].mouse_entered.connect(_show_item_tooltip.bind(col, c["slot"]))
 		c["slot"].mouse_exited.connect(_hide_tooltip)
+
+	# === 大地图面板 (M键/点击小地图, 羊皮纸底, 大范围概览) ===
+	var map_w = 1000; var map_h = 660
+	map_panel = Panel.new()
+	map_panel.position = Vector2((SCREEN_W - map_w) / 2.0, (SCREEN_H - map_h) / 2.0 - 20)
+	map_panel.size = Vector2(map_w, map_h)
+	map_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	map_panel.visible = false
+	hud.add_child(map_panel)
+	var map_parch = TextureRect.new()
+	map_parch.texture = load("res://assets/ui/parchment.png")
+	map_parch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	map_parch.stretch_mode = TextureRect.STRETCH_SCALE
+	map_parch.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	map_parch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_panel.add_child(map_parch)
+	map_parch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	map_title = Label.new()
+	map_title.text = "地图"
+	map_title.position = Vector2(46, 24)
+	map_title.add_theme_font_size_override("font_size", 26)
+	map_title.add_theme_color_override("font_color", Color(0.28, 0.18, 0.09))
+	map_panel.add_child(map_title)
+	# 地图显示区(方形, 居中) + 描边
+	var map_disp = 540
+	var map_x = (map_w - map_disp) / 2.0
+	var map_y = 72
+	var map_border = StyleBoxFlat.new()
+	map_border.bg_color = Color(0, 0, 0, 0)
+	map_border.set_border_width_all(3)
+	map_border.border_color = Color(0.34, 0.25, 0.15, 0.9)
+	var map_frame = Panel.new()
+	map_frame.position = Vector2(map_x - 3, map_y - 3)
+	map_frame.size = Vector2(map_disp + 6, map_disp + 6)
+	map_frame.add_theme_stylebox_override("panel", map_border)
+	map_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_panel.add_child(map_frame)
+	map_rect = TextureRect.new()
+	map_rect.position = Vector2(map_x, map_y)
+	map_rect.size = Vector2(map_disp, map_disp)
+	map_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	map_rect.stretch_mode = TextureRect.STRETCH_SCALE
+	map_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	map_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_panel.add_child(map_rect)
+	var map_hint = Label.new()
+	map_hint.text = "M / ESC 关闭"
+	map_hint.position = Vector2(46, map_h - 40)
+	map_hint.add_theme_font_size_override("font_size", 16)
+	map_hint.add_theme_color_override("font_color", Color(0.36, 0.26, 0.15))
+	map_panel.add_child(map_hint)
 
 	# === 制造面板 (C键居中) ===
 	var cw = 420; var ch = 420
@@ -490,6 +545,8 @@ func mark_dirty() -> void:
 func toggle_inventory() -> void:
 	inventory_open = !inventory_open
 	if inventory_open:
+		map_open = false
+		map_panel.visible = false
 		craft_open = false
 		craft_panel.visible = false
 		craft_title_label.visible = false
@@ -507,6 +564,8 @@ func toggle_inventory() -> void:
 func toggle_craft() -> void:
 	craft_open = !craft_open
 	if craft_open:
+		map_open = false
+		map_panel.visible = false
 		inventory_open = false
 		inv_panel.visible = false
 		inv_title.visible = false
@@ -524,6 +583,8 @@ func toggle_craft() -> void:
 func close_all() -> void:
 	inventory_open = false
 	craft_open = false
+	map_open = false
+	map_panel.visible = false
 	inv_panel.visible = false
 	inv_title.visible = false
 	craft_panel.visible = false
@@ -535,6 +596,21 @@ func close_all() -> void:
 	for btn in build_buttons:
 		btn.visible = false
 	set_hint("WASD移动 J采集 B背包 C制造 V建造")
+	mark_dirty()
+
+
+func toggle_map() -> void:
+	map_open = !map_open
+	if map_open:
+		inventory_open = false
+		inv_panel.visible = false
+		inv_title.visible = false
+		craft_open = false
+		craft_panel.visible = false
+		craft_title_label.visible = false
+		for btn in craft_buttons:
+			btn.visible = false
+	map_panel.visible = map_open
 	mark_dirty()
 
 
