@@ -24,10 +24,16 @@ var hotbar_panel: Panel
 var hotbar_slots: Array[Panel] = []
 var hotbar_labels: Array[Label] = []
 var hotbar_icons: Array[TextureRect] = []
+var hotbar_highlight: TextureRect
 var inv_panel: Panel
-var inv_grid: Array[Panel] = []
+var inv_grid: Array[Panel] = []          # 背包 30 格(inv 10-39)
 var inv_grid_labels: Array[Label] = []
 var inv_grid_icons: Array[TextureRect] = []
+var inv_itembar: Array[Panel] = []       # 物品栏 10 格(inv 0-9, = 快捷栏)
+var inv_itembar_labels: Array[Label] = []
+var inv_itembar_icons: Array[TextureRect] = []
+var inv_char_preview: TextureRect        # 左上角色预览
+var inv_stats_label: Label               # 右上角色属性
 var inv_title: Label
 var craft_panel: Panel
 var craft_buttons: Array[Button] = []
@@ -98,7 +104,7 @@ func create() -> void:
 	if frame_tex and frame_tex.get_width() > 0:
 		bar_h = bar_w * float(frame_tex.get_height()) / float(frame_tex.get_width())
 	hotbar_panel = Panel.new()
-	hotbar_panel.position = Vector2((SCREEN_W - bar_w) / 2.0, SCREEN_H - bar_h - 6)
+	hotbar_panel.position = Vector2((SCREEN_W - bar_w) / 2.0, SCREEN_H - bar_h + 12)
 	hotbar_panel.size = Vector2(bar_w, bar_h)
 	hotbar_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	hud.add_child(hotbar_panel)
@@ -144,42 +150,90 @@ func create() -> void:
 		hotbar_icons.append(icon)
 		slot.mouse_entered.connect(_show_item_tooltip.bind(i, slot))
 		slot.mouse_exited.connect(_hide_tooltip)
+	# 选中高亮框(金框素材，叠在选中格上)
+	hotbar_highlight = TextureRect.new()
+	hotbar_highlight.texture = load("res://assets/ui/slot_highlight.png")
+	hotbar_highlight.modulate = Color(0.95, 0.88, 0.70, 0.42)  # 降亮+柔化，别太抢眼
+	hotbar_highlight.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	hotbar_highlight.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hotbar_highlight.stretch_mode = TextureRect.STRETCH_SCALE
+	hotbar_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hotbar_highlight.visible = false
+	hotbar_panel.add_child(hotbar_highlight)
 	update_hotbar_selection()
 
-	# === 背包面板 (B键居中) ===
-	var inv_w = 480; var inv_h = 360
+	# === 背包面板 (B键, Minecraft风: 羊皮纸 + 角色 + 30背包 + 10物品栏) ===
+	var inv_w = 920; var inv_h = 660
 	inv_panel = Panel.new()
-	inv_panel.position = Vector2((SCREEN_W - inv_w) / 2, (SCREEN_H - inv_h) / 2 - 30)
+	inv_panel.position = Vector2((SCREEN_W - inv_w) / 2.0, (SCREEN_H - inv_h) / 2.0 - 20)
 	inv_panel.size = Vector2(inv_w, inv_h)
-	inv_panel.modulate = Color(0.05, 0.05, 0.05, 0.92)
+	inv_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	inv_panel.visible = false
 	hud.add_child(inv_panel)
-
+	# 羊皮纸底
+	var parch = TextureRect.new()
+	parch.texture = load("res://assets/ui/parchment.png")
+	parch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	parch.stretch_mode = TextureRect.STRETCH_SCALE
+	parch.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	parch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inv_panel.add_child(parch)
+	parch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# 标题(深棕，配羊皮纸)
 	inv_title = Label.new()
 	inv_title.text = "背包"
-	inv_title.position = Vector2((SCREEN_W - inv_w) / 2 + 16, (SCREEN_H - inv_h) / 2 - 30 + 10)
-	inv_title.add_theme_font_size_override("font_size", 20)
-	inv_title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
+	inv_title.position = Vector2(44, 24)
+	inv_title.add_theme_font_size_override("font_size", 26)
+	inv_title.add_theme_color_override("font_color", Color(0.28, 0.18, 0.09))
 	inv_title.visible = false
-	hud.add_child(inv_title)
-
-	# 背包格子 5列x4行
-	for row in range(4):
-		for col in range(5):
-			var s = _make_slot(inv_panel, Vector2(16 + col * 92, 44 + row * 74), Vector2(84, 68),
-				Vector2(20 + col * 92, 46 + row * 74), Vector2(76, 64), Vector2(20 + col * 92 + 4, 48 + row * 74 + 4), false, true)
-			inv_grid.append(s["slot"])
-			inv_grid_labels.append(s["label"])
-			inv_grid_icons.append(s["icon"])
-			s["slot"].mouse_entered.connect(_show_item_tooltip.bind(row * 5 + col, s["slot"]))
-			s["slot"].mouse_exited.connect(_hide_tooltip)
+	inv_panel.add_child(inv_title)
+	# 角色预览(左上)
+	inv_char_preview = TextureRect.new()
+	inv_char_preview.position = Vector2(74, 78)
+	inv_char_preview.size = Vector2(150, 200)
+	inv_char_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	inv_char_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	inv_char_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	inv_char_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var knight_tex = load("res://assets/characters/knight_aligned.png")
+	if knight_tex:
+		var katlas = AtlasTexture.new()
+		katlas.atlas = knight_tex
+		katlas.region = Rect2(0, 0, 128, 128)  # 朝下站立帧(面向镜头)
+		inv_char_preview.texture = katlas
+	inv_panel.add_child(inv_char_preview)
+	# 角色属性(右上, 占位数值)
+	inv_stats_label = Label.new()
+	inv_stats_label.position = Vector2(560, 86)
+	inv_stats_label.add_theme_font_size_override("font_size", 18)
+	inv_stats_label.add_theme_color_override("font_color", Color(0.26, 0.16, 0.08))
+	inv_stats_label.text = "【角色属性】\n\n生命   100 / 100\n攻击   --\n防御   --\n等级   1"
+	inv_panel.add_child(inv_stats_label)
+	# 格子排布参数
+	var gsz = 70; var gstep = 80
+	var gx0 = (inv_w - 10 * gstep) / 2.0 + (gstep - gsz) / 2.0
+	var gy0 = 318
+	# 背包 30 格 (3×10, inv 10-39)
+	for row in range(3):
+		for col in range(10):
+			var c = _make_inv_cell(inv_panel, Vector2(gx0 + col * gstep, gy0 + row * gstep), gsz, false)
+			inv_grid.append(c["slot"]); inv_grid_labels.append(c["label"]); inv_grid_icons.append(c["icon"])
+			c["slot"].mouse_entered.connect(_show_item_tooltip.bind(10 + row * 10 + col, c["slot"]))
+			c["slot"].mouse_exited.connect(_hide_tooltip)
+	# 物品栏 10 格 (1×10, inv 0-9 = 快捷栏)
+	var iby = gy0 + 3 * gstep + 24
+	for col in range(10):
+		var c = _make_inv_cell(inv_panel, Vector2(gx0 + col * gstep, iby), gsz, true)
+		inv_itembar.append(c["slot"]); inv_itembar_labels.append(c["label"]); inv_itembar_icons.append(c["icon"])
+		c["slot"].mouse_entered.connect(_show_item_tooltip.bind(col, c["slot"]))
+		c["slot"].mouse_exited.connect(_hide_tooltip)
 
 	# === 制造面板 (C键居中) ===
 	var cw = 420; var ch = 420
 	craft_panel = Panel.new()
 	craft_panel.position = Vector2((SCREEN_W - cw) / 2, (SCREEN_H - ch) / 2 - 30)
 	craft_panel.size = Vector2(cw, ch)
-	craft_panel.modulate = Color(0.05, 0.05, 0.05, 0.92)
+	craft_panel.add_theme_stylebox_override("panel", _make_panel_style())
 	craft_panel.visible = false
 	hud.add_child(craft_panel)
 
@@ -193,27 +247,33 @@ func create() -> void:
 	refresh_craft_buttons()
 
 	# === 左上角：时间+位置 ===
-	# 小地图(左上角)
+	# 小地图(左上角，青铜边框素材 + 中间透明窗口显示地形)
+	# 简洁窄边框(代码生成，深棕内衬 + 暗青铜细边，融入整体风格)
+	var mm_size = 232
 	minimap_panel = Panel.new()
-	minimap_panel.position = Vector2(12, 12)
-	minimap_panel.size = Vector2(180, 180)
-	var msb = StyleBoxFlat.new()
-	msb.bg_color = Color(0.05, 0.05, 0.07, 0.9)
-	msb.set_border_width_all(2)
-	msb.border_color = Color(0.5, 0.45, 0.3)
-	msb.set_corner_radius_all(3)
-	minimap_panel.add_theme_stylebox_override("panel", msb)
+	minimap_panel.position = Vector2(14, 14)
+	minimap_panel.size = Vector2(mm_size, mm_size)
+	var mm_sb = StyleBoxFlat.new()
+	mm_sb.bg_color = Color(0.13, 0.10, 0.06, 0.94)        # 深棕内衬
+	mm_sb.set_border_width_all(3)
+	mm_sb.border_color = Color(0.42, 0.32, 0.18, 1.0)     # 暗青铜细边
+	mm_sb.set_corner_radius_all(3)
+	mm_sb.shadow_color = Color(0, 0, 0, 0.4)
+	mm_sb.shadow_size = 4
+	minimap_panel.add_theme_stylebox_override("panel", mm_sb)
 	hud.add_child(minimap_panel)
+	# 地图填满内部(留窄内衬)
+	var mm_pad = 6
 	minimap_rect = TextureRect.new()
-	minimap_rect.position = Vector2(4, 4)
-	minimap_rect.size = Vector2(172, 172)
+	minimap_rect.position = Vector2(mm_pad, mm_pad)
+	minimap_rect.size = Vector2(mm_size - mm_pad * 2, mm_size - mm_pad * 2)
 	minimap_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	minimap_rect.stretch_mode = TextureRect.STRETCH_SCALE
 	minimap_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	minimap_panel.add_child(minimap_rect)
 
 	corner_tl = Label.new()
-	corner_tl.position = Vector2(12, 200)
+	corner_tl.position = Vector2(16, 254)
 	corner_tl.add_theme_font_size_override("font_size", 15)
 	corner_tl.add_theme_color_override("font_color", Color.WHITE)
 	corner_tl.text = ""
@@ -399,25 +459,26 @@ func refresh_slots() -> void:
 
 	# === 背包面板（仅在打开时更新）===
 	if inventory_open and inv:
-		for i in range(20):
-			if i < inv.slots.size() and not inv.slots[i].is_empty():
-				var slot = inv.slots[i]
-				var item_def = ItemDatabase.get_item(slot.get("item_id", ""))
-				var name = item_def.get("name", slot.get("item_id", ""))
-				var qty = slot.get("quantity", 0)
-				var dur = slot.get("durability", 0)
-				var dur_text = " (耐久:%d)" % dur if dur > 0 else ""
-				inv_grid_labels[i].text = "%s\nx%d%s" % [name, qty, dur_text]
-				inv_grid[i].modulate = Color(0.2, 0.2, 0.2, 0.9) if i == hotbar_selected else Color(0.15, 0.15, 0.15, 0.9)
-				if i < inv_grid_icons.size():
-					inv_grid_icons[i].texture = TextureGen.get_item_icon(slot.get("item_id", ""))
-			else:
-				inv_grid_labels[i].text = ""
-				inv_grid[i].modulate = Color(0.15, 0.15, 0.15, 0.9)
-				if i < inv_grid_icons.size():
-					inv_grid_icons[i].texture = null
+		# 背包 30 格 = inv 10-39
+		for i in range(inv_grid.size()):
+			_refresh_cell(inv, 10 + i, inv_grid_labels[i], inv_grid_icons[i])
+		# 物品栏 10 格 = inv 0-9（与快捷栏同步）
+		for i in range(inv_itembar.size()):
+			_refresh_cell(inv, i, inv_itembar_labels[i], inv_itembar_icons[i])
 
 	inventory_dirty = false
+
+
+## 刷新单个背包/物品栏格子：显示图标 + 数量（仅 >1 时显示），详情走 tooltip。
+func _refresh_cell(inv, idx: int, lbl: Label, icon: TextureRect) -> void:
+	if idx < inv.slots.size() and not inv.slots[idx].is_empty():
+		var slot = inv.slots[idx]
+		var qty = int(slot.get("quantity", 0))
+		lbl.text = str(qty) if qty > 1 else ""
+		icon.texture = TextureGen.get_item_icon(slot.get("item_id", ""))
+	else:
+		lbl.text = ""
+		icon.texture = null
 
 
 func mark_dirty() -> void:
@@ -485,18 +546,14 @@ func set_hint(text: String) -> void:
 # ========== 快捷栏 ==========
 
 func update_hotbar_selection() -> void:
-	for i in range(10):
-		if i >= hotbar_slots.size():
-			continue
-		if i == hotbar_selected:
-			var sel = StyleBoxFlat.new()
-			sel.bg_color = Color(0.9, 0.63, 0.29, 0.18)   # 暖橙微底
-			sel.set_border_width_all(2)
-			sel.border_color = Color(0.95, 0.7, 0.35)      # 暖橙描边
-			sel.set_corner_radius_all(3)
-			hotbar_slots[i].add_theme_stylebox_override("panel", sel)
-		else:
-			hotbar_slots[i].add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	if hotbar_highlight == null or hotbar_slots.is_empty():
+		return
+	var idx = clampi(hotbar_selected, 0, hotbar_slots.size() - 1)
+	var slot = hotbar_slots[idx]
+	var hl_size = slot.size * 1.32  # 金框略大于格子，包住选中格
+	hotbar_highlight.size = hl_size
+	hotbar_highlight.position = slot.position + slot.size / 2.0 - hl_size / 2.0
+	hotbar_highlight.visible = true
 
 
 # ========== 采集进度条 ==========
@@ -660,3 +717,58 @@ func _make_slot(parent: Control, slot_pos: Vector2, slot_size: Vector2,
 	parent.add_child(icon)
 
 	return {"slot": slot, "label": lbl, "icon": icon}
+
+
+## 背包/物品栏格子（羊皮纸上的凹陷暗格 + 大图标 + 右下数量）。
+## is_itembar=true 时用暖金色边框，与背包格子做视觉区分。
+func _make_inv_cell(parent: Control, pos: Vector2, sz: float, is_itembar: bool) -> Dictionary:
+	var slot = Panel.new()
+	slot.position = pos
+	slot.size = Vector2(sz, sz)
+	var sb = StyleBoxFlat.new()
+	if is_itembar:
+		sb.bg_color = Color(0.22, 0.15, 0.07, 0.55)   # 物品栏稍暖
+		sb.border_color = Color(0.62, 0.45, 0.20, 0.95)
+		sb.set_border_width_all(3)
+	else:
+		sb.bg_color = Color(0.14, 0.10, 0.06, 0.50)   # 背包格
+		sb.border_color = Color(0.34, 0.25, 0.15, 0.85)
+		sb.set_border_width_all(2)
+	sb.set_corner_radius_all(4)
+	slot.add_theme_stylebox_override("panel", sb)
+	parent.add_child(slot)
+
+	var icon = TextureRect.new()
+	icon.position = pos + Vector2(sz * 0.13, sz * 0.10)
+	icon.size = Vector2(sz * 0.62, sz * 0.62)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(icon)
+
+	var lbl = Label.new()
+	lbl.position = pos + Vector2(0, sz - 24)
+	lbl.size = Vector2(sz - 6, 20)
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", Color(0.98, 0.94, 0.80))
+	lbl.add_theme_color_override("font_outline_color", Color(0.1, 0.07, 0.03))
+	lbl.add_theme_constant_override("outline_size", 3)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(lbl)
+
+	return {"slot": slot, "label": lbl, "icon": icon}
+
+
+## 统一的简约面板样式：半透明深底 + 细青铜描边 + 圆角（背包/制造等功能面板用）。
+func _make_panel_style() -> StyleBoxFlat:
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(0.11, 0.10, 0.08, 0.96)
+	sb.set_border_width_all(3)
+	sb.border_color = Color(0.78, 0.64, 0.40)   # 亮青铜，明显
+	sb.set_corner_radius_all(7)
+	sb.shadow_color = Color(0, 0, 0, 0.5)        # 外阴影，让面板浮起
+	sb.shadow_size = 8
+	return sb

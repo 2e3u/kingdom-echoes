@@ -375,21 +375,39 @@ func get_debug_ecology_value(layer: String, gx: int, gy: int) -> float:
 		"temperature", "moisture", "soil_depth", "elevation":
 			return float(_sample_ecology_layers(gx, gy).get(layer, 0.5))
 		"forest_raw":
-			return _get_region_noise_value(_get_forest_debug_region_noise(), gx, gy)
+			var rn = _find_resource_region_noise("round_forest")
+			return _get_region_noise_value(rn, gx, gy) if not rn.is_empty() else 0.0
 		"forest_suitability":
-			return _get_shaped_region_spawn_multiplier(_get_forest_debug_region_noise(), gx, gy)
+			var rn2 = _find_resource_region_noise("round_forest")
+			return _get_shaped_region_spawn_multiplier(rn2, gx, gy) if not rn2.is_empty() else 0.0
 		"tree_density":
-			var ecology = _sample_ecology_layers(gx, gy)
-			var tree_preference = {"temperature": 0.48, "moisture": 0.66, "soil_depth": 0.80, "tolerance": 0.34, "min_multiplier": 0.08}
-			var region = _get_shaped_region_spawn_multiplier(_get_forest_debug_region_noise(), gx, gy)
-			var ecology_fit = _get_ecology_spawn_multiplier({"ecology": tree_preference}, ecology)
-			return clampf(region * ecology_fit, 0.0, 1.0)
+			return get_tree_cover_at(gx, gy)
 		_:
 			return 0.0
 
 
-func _get_forest_debug_region_noise() -> Dictionary:
-	return {"group": "forest", "frequency": 0.018, "threshold": 0.54, "softness": 0.105, "power": 1.45, "octaves": 4, "gain": 0.56}
+## 实际树木覆盖度(0-1)。直接复用游戏真实 spawn 用的 resource_defs 参数
+## (region_noise + ecology，跟 1158~1161 行的 spawn 决策同一条路径)，
+## 取阔叶/针叶两种森林的较大值。供小地图与 debug 叠加层共用，确保与实际地图一致。
+func get_tree_cover_at(gx: int, gy: int) -> float:
+	var ecology = _sample_ecology_layers(gx, gy)
+	var cover = 0.0
+	for d in _resource_defs:
+		var grp = str(d.get("cluster_group", ""))
+		if grp != "round_forest" and grp != "conifer_forest":
+			continue
+		var region = _get_region_spawn_multiplier(d, gx, gy, "res")
+		var eco = _get_ecology_spawn_multiplier(d, ecology)
+		cover = maxf(cover, region * eco)
+	return clampf(cover, 0.0, 1.0)
+
+
+## 从真实 resource_defs 中按 cluster_group 取出 region_noise 配置(供 debug 叠加层用)。
+func _find_resource_region_noise(group: String) -> Dictionary:
+	for d in _resource_defs:
+		if str(d.get("cluster_group", "")) == group:
+			return d.get("region_noise", {})
+	return {}
 
 
 static func world_position_to_cell(pos: Vector2, tile_size: int) -> Vector2i:

@@ -172,7 +172,8 @@ var _godray_mat: ShaderMaterial = null
 var _godray_time: float = 0.0
 var _shadow_update_timer: float = 0.0  # 动态阴影低频更新计时
 var _minimap_timer: float = 0.0
-const MINIMAP_SAMPLES := 56  # 小地图采样格数(覆盖玩家周围 56×56 格)
+const MINIMAP_SAMPLES := 120  # 小地图分辨率(采样点数) = 覆盖格数(STEP=1时)
+const MINIMAP_STEP := 1       # 每点跨1格 → 覆盖120格，≈屏幕可见(86×48)略大，所见即所得
 
 # 资源节点（引用 WorldGenerator 内部字典）
 var resource_sprites: Dictionary = {}
@@ -885,8 +886,16 @@ func _update_minimap() -> void:
 	var half = int(n / 2)
 	for y in range(n):
 		for x in range(n):
-			var b = world_generator.get_biome_at(pc.x + x - half, pc.y + y - half)
-			img.set_pixel(x, y, _biome_minimap_color(b))
+			var gx = pc.x + (x - half) * MINIMAP_STEP
+			var gy = pc.y + (y - half) * MINIMAP_STEP
+			var b = world_generator.get_biome_at(gx, gy)
+			var col = _biome_minimap_color(b)
+			# 树是独立的密度层(不是 biome)：陆地上树多的地方在小地图按密度混成森林绿，与实际地表对应
+			if b == WorldGenerator.BIOME_GRASS or b == WorldGenerator.BIOME_FOREST or b == WorldGenerator.BIOME_DIRT or b == WorldGenerator.BIOME_SWAMP:
+				var td = world_generator.get_tree_cover_at(gx, gy)
+				if td > 0.1:
+					col = col.lerp(Color(0.16, 0.33, 0.15), clampf(td, 0.0, 0.9))
+			img.set_pixel(x, y, col)
 	# 玩家中心红点
 	for dy in range(-1, 2):
 		for dx in range(-1, 2):

@@ -34,7 +34,7 @@ const HEALTH_CHECK_PATH: String = "/health"
 const HEALTH_CHECK_INTERVAL_SEC: float = 5.0
 
 # ---------- 背包 ----------
-const INVENTORY_INITIAL_SLOTS: int = 20
+const INVENTORY_INITIAL_SLOTS: int = 40  # 0-9=物品栏(=快捷栏), 10-39=背包30格
 const INVENTORY_MAX_SLOTS: int = 60
 const HOTBAR_SLOTS: int = 8
 
