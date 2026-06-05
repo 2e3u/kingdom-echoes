@@ -34,6 +34,7 @@ var inv_itembar_labels: Array[Label] = []
 var inv_itembar_icons: Array[TextureRect] = []
 var inv_char_preview: TextureRect        # 左上角色预览
 var inv_stats_label: Label               # 右上角色属性
+var inv_equip_slots: Array[Panel] = []   # 装备槽(盔/甲/链/饰, 占位)
 var inv_title: Label
 var craft_panel: Panel
 var craft_buttons: Array[Button] = []
@@ -193,8 +194,8 @@ func create() -> void:
 	inv_panel.add_child(inv_title)
 	# 角色预览(左上)
 	inv_char_preview = TextureRect.new()
-	inv_char_preview.position = Vector2(74, 78)
-	inv_char_preview.size = Vector2(150, 200)
+	inv_char_preview.position = Vector2(120, 78)
+	inv_char_preview.size = Vector2(150, 210)
 	inv_char_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	inv_char_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	inv_char_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -206,6 +207,30 @@ func create() -> void:
 		katlas.region = Rect2(0, 0, 128, 128)  # 朝下站立帧(面向镜头)
 		inv_char_preview.texture = katlas
 	inv_panel.add_child(inv_char_preview)
+	# 装备槽(角色左侧竖排, 占位: 头盔/护甲/项链/饰品)
+	var equip_labels = ["盔", "甲", "链", "饰"]
+	for ei in range(4):
+		var es = Panel.new()
+		var ey = 78 + ei * 60
+		es.position = Vector2(44, ey)
+		es.size = Vector2(54, 54)
+		var esb = StyleBoxFlat.new()
+		esb.bg_color = Color(0.20, 0.14, 0.07, 0.50)
+		esb.set_border_width_all(2)
+		esb.border_color = Color(0.55, 0.42, 0.20, 0.9)
+		esb.set_corner_radius_all(4)
+		es.add_theme_stylebox_override("panel", esb)
+		inv_panel.add_child(es)
+		var el = Label.new()
+		el.text = equip_labels[ei]
+		el.position = Vector2(44, ey + 15)
+		el.size = Vector2(54, 24)
+		el.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		el.add_theme_font_size_override("font_size", 18)
+		el.add_theme_color_override("font_color", Color(0.52, 0.42, 0.26, 0.75))
+		el.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inv_panel.add_child(el)
+		inv_equip_slots.append(es)
 	# 角色属性(右上, 占位数值)
 	inv_stats_label = Label.new()
 	inv_stats_label.position = Vector2(560, 86)
@@ -283,20 +308,28 @@ func create() -> void:
 	map_hint.add_theme_color_override("font_color", Color(0.36, 0.26, 0.15))
 	map_panel.add_child(map_hint)
 
-	# === 制造面板 (C键居中) ===
-	var cw = 420; var ch = 420
+	# === 制造面板 (C键居中, 羊皮纸底) ===
+	var cw = 460; var ch = 460
 	craft_panel = Panel.new()
 	craft_panel.position = Vector2((SCREEN_W - cw) / 2, (SCREEN_H - ch) / 2 - 30)
 	craft_panel.size = Vector2(cw, ch)
-	craft_panel.add_theme_stylebox_override("panel", _make_panel_style())
+	craft_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	craft_panel.visible = false
 	hud.add_child(craft_panel)
+	var craft_parch = TextureRect.new()
+	craft_parch.texture = load("res://assets/ui/parchment.png")
+	craft_parch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	craft_parch.stretch_mode = TextureRect.STRETCH_SCALE
+	craft_parch.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	craft_parch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	craft_panel.add_child(craft_parch)
+	craft_parch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	craft_title_label = Label.new()
 	craft_title_label.text = "制造 (手工)"
-	craft_title_label.position = Vector2((SCREEN_W - cw) / 2 + 16, (SCREEN_H - ch) / 2 - 30 + 10)
-	craft_title_label.add_theme_font_size_override("font_size", 20)
-	craft_title_label.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
+	craft_title_label.position = Vector2((SCREEN_W - cw) / 2 + 20, (SCREEN_H - ch) / 2 - 30 + 12)
+	craft_title_label.add_theme_font_size_override("font_size", 22)
+	craft_title_label.add_theme_color_override("font_color", Color(0.28, 0.18, 0.09))
 	craft_title_label.visible = false
 	hud.add_child(craft_title_label)
 	refresh_craft_buttons()
@@ -668,11 +701,12 @@ func refresh_craft_buttons() -> void:
 		tab.position = Vector2(tab_x, cp.y + 40)
 		tab.size = Vector2(68, 28)
 		tab.add_theme_font_size_override("font_size", 12)
+		_style_parchment_button(tab, st != current_station)
 		if st == current_station:
-			tab.add_theme_color_override("font_color", Color.YELLOW)
+			tab.add_theme_color_override("font_color", Color(0.62, 0.12, 0.08))  # 选中:深红
 			tab.disabled = true
 		else:
-			tab.add_theme_color_override("font_color", Color.WHITE)
+			tab.add_theme_color_override("font_color", Color(0.30, 0.20, 0.10))  # 深棕
 		tab.pressed.connect(_on_station_changed.bind(st))
 		tab.visible = craft_open
 		hud.add_child(tab)
@@ -700,12 +734,15 @@ func refresh_craft_buttons() -> void:
 
 		var btn = Button.new()
 		btn.text = "%s x%d  [%s]" % [output_name, output_qty, mat_text]
-		btn.position = Vector2(cp.x + 16, y_offset)
-		btn.size = Vector2(388, 30)
+		btn.position = Vector2(cp.x + 18, y_offset)
+		btn.size = Vector2(424, 32)
 		btn.add_theme_font_size_override("font_size", 13)
 		btn.disabled = not can_craft
+		_style_parchment_button(btn, can_craft)
 		if can_craft:
-			btn.add_theme_color_override("font_color", Color.GREEN)
+			btn.add_theme_color_override("font_color", Color(0.13, 0.38, 0.10))  # 可制造:深绿
+		else:
+			btn.add_theme_color_override("font_color", Color(0.42, 0.33, 0.24))  # 不可:暗棕
 		btn.pressed.connect(_on_craft_button.bind(recipe.get("recipe_id", "")))
 		btn.visible = craft_open
 		hud.add_child(btn)
@@ -713,6 +750,24 @@ func refresh_craft_buttons() -> void:
 		y_offset += 34
 		if y_offset > cp.y + 380:
 			break
+
+
+## 羊皮纸风格按钮：半透明暖棕底 + 细边，深色文字由调用方设置。
+func _style_parchment_button(btn: Button, enabled: bool) -> void:
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(0.34, 0.25, 0.13, 0.55) if enabled else Color(0.26, 0.22, 0.17, 0.32)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.45, 0.34, 0.18, 0.7)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	var hover = sb.duplicate()
+	hover.bg_color = Color(0.44, 0.33, 0.18, 0.68)
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", hover)
+	btn.add_theme_stylebox_override("disabled", sb)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 
 func _on_station_changed(station: int) -> void:
